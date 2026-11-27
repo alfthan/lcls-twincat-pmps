@@ -1,7 +1,23 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <POU Name="F_CalculatePhotonEnergy" Id="{98a6c884-5453-4269-81f4-62a502722fab}" SpecialFunc="None">
-    <Declaration><![CDATA[FUNCTION F_CalculatePhotonEnergy : LREAL
+    <Declaration><![CDATA[(*
+F_CalculatePhotonEnergy
+
+Calculates the on-axis photon energy, in eV, of an undulator from the electron
+beam energy, the undulator period and the undulator K parameter:
+
+    E_photon = 2 * (E_e / m_e)^2 * h * c / (e * lambda_u * (1 + K^2 / 2))
+
+Inputs are the electron energy in GeV, the undulator period in mm and the
+dimensionless undulator strength K; the result is in eV.
+
+The mm -> m conversion of the undulator period and the floor applied to the
+denominator are declared once as the named PMPS_PARAM constants M_PER_MM and
+MIN_PHOTON_ENERGY_DENOM instead of being written inline, so both can be
+reviewed, tuned and reused without editing the formula.
+*)
+FUNCTION F_CalculatePhotonEnergy : LREAL
 VAR_INPUT
     (* Electron energy in GeV *)
     fElectronEnergy_GeV : LREAL;
@@ -55,8 +71,8 @@ def calculate_photon_energy(electron_energy, period, k):
             (e * period * 1e-3 * (1 + k ** 2 / 2.)))
 
 *)
-fDenominator := (e * fUndulatorPeriod_mm * 1E-3 * (1.0 + EXPT(fUndulatorStrength, 2.0) / 2.0));
-F_CalculatePhotonEnergy := (2.0 * EXPT(fElectronEnergy_GeV / m_e, 2.0) * h * c) / MAX(fDenominator, 4.94065645841247E-324);
+fDenominator := (e * fUndulatorPeriod_mm * PMPS_PARAM.M_PER_MM * (1.0 + EXPT(fUndulatorStrength, 2.0) / 2.0));
+F_CalculatePhotonEnergy := (2.0 * EXPT(fElectronEnergy_GeV / m_e, 2.0) * h * c) / MAX(fDenominator, PMPS_PARAM.MIN_PHOTON_ENERGY_DENOM);
 ]]></ST>
     </Implementation>
   </POU>

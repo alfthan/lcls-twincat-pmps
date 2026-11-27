@@ -6,6 +6,11 @@ VAR_GLOBAL CONSTANT
     MAX_FAST_FAULTS	:	UINT := 50; // Max fast faults for an FFO
     MAX_ASSERTIONS    :    UDINT := 20; //Maximum number of BP requests in the arbiter
     TRANS_MARGIN : REAL := REAL#0.20; // Allowed % margin above requested transmission level in SafeBPCompare (0.2000 = 20deci% default). Note: change this value if scaling factor changes.
+
+    // Cross-cutting values of the photon energy calculation (F_CalculatePhotonEnergy).
+    // Declared once here so they can be reviewed and tuned without editing the formula.
+    M_PER_MM                 : LREAL := 1.0E-3;                // Metres per millimetre: converts the undulator period from mm to m
+    MIN_PHOTON_ENERGY_DENOM  : LREAL := 4.94065645841247E-324; // Smallest positive LREAL (denormal); floor applied to the energy denominator to avoid division by zero
 END_VAR]]></Declaration>
   </GVL>
 </TcPlcObject>
