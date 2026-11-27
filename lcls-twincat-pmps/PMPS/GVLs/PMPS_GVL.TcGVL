@@ -49,6 +49,17 @@ VAR_GLOBAL CONSTANT
     VISIBLE_TEST_VELOCITY    :    LREAL    := 10;
     FAST_TEST_VELOCITY        :    LREAL    := 100;
     MAX_DEVICE_STATES        :    UDINT    := 300;
+    // Sequence states of the JSON ancillary components. A failing state moves the
+    // block to JSON_STEP_ERR_OFFSET + the failing state and reports that value as
+    // nErrId, so changing a state value also changes the reported error id.
+    JSON_STEP_IDLE               : INT := 0;   // Idle, waiting for a rising edge on bExecute
+    JSON_STEP_FIND_DEVICE        : INT := 20;  // Locate the device name in the JSON document (FB_JsonDocToSafeBP)
+    JSON_STEP_CHECK_STATES       : INT := 21;  // Check every configured device state has a member in the JSON document
+    JSON_STEP_CHECK_STATE_ARRAY  : INT := 22;  // Check the configured device state array is not empty
+    JSON_STEP_LOAD_STATES        : INT := 23;  // Load the beam parameters of every configured device state
+    JSON_STEP_COMPLETE           : INT := 30;  // Sequence finished successfully, block returns to idle
+    JSON_STEP_ERR_OFFSET         : INT := 900; // Offset added to a failing sequence state to form the error state and nErrId
+    FF_TYPE_JSON_LOAD            : UINT := 16#FF13; // Fast fault type code reported for JSON file / document load failures
 
     TRANS_SCALING_FACTOR : REAL := REAL#1.0; // Scaling factor for fixed-point transmission
 

@@ -49,7 +49,7 @@ VAR
     (*FFO*)
     FFO    :    FB_FastFault :=(
         i_Desc := 'Fault occurs when there is an error reading json file',
-        i_TypeCode := 16#FF13);
+        i_TypeCode := PMPS_GVL.FF_TYPE_JSON_LOAD);
 END_VAR
 ]]></Declaration>
     <Implementation>
@@ -99,7 +99,7 @@ CASE Step OF
                     nErrId := fbFileOpen.nErrId;
                     bError := TRUE;
                     sErrMsg:= CONCAT('Error Opening Json File. E:', TO_STRING(nErrId));
-                    Step := 900 + Step;
+                    Step := PMPS_GVL.JSON_STEP_ERR_OFFSET + Step;
                ELSE
                     hSrcFile := fbFileOpen.hFile;
                     Step := Step + 1;
@@ -121,7 +121,7 @@ CASE Step OF
                     nErrId := fbFileRead.nErrId;
                     bError := TRUE;
                     sErrMsg:= CONCAT('Error reading Json File. E: ', TO_STRING(nErrId));
-                    Step := 900 +Step;
+                    Step := PMPS_GVL.JSON_STEP_ERR_OFFSET + Step;
                ELSE
                     cbReadLength := fbFileRead.cbRead;
                     nFileLength := nFileLength + cbReadLength;
@@ -134,7 +134,7 @@ CASE Step OF
             nErrId := fbFileRead.nErrId;
             bError := TRUE;
             sErrMsg:= CONCAT( 'Zero bytes were read from the Json File. E:', TO_STRING(nErrId));
-            Step := 900 +Step;
+            Step := PMPS_GVL.JSON_STEP_ERR_OFFSET + Step;
         ELSE // we read something, lets log about it
             fbLogger(sMsg:=CONCAT('Total numbers of Bytes read from file : ', TO_STRING(nFileLength)), eSevr:=TcEventSeverity.Info);
             Step := Step + 1 ;
@@ -154,7 +154,7 @@ CASE Step OF
                IF fbFileClose.bError THEN
                     nErrId := fbFileClose.nErrId;
                     bError := TRUE;
-                    Step:=900+Step;
+                    Step:=PMPS_GVL.JSON_STEP_ERR_OFFSET + Step;
                     sErrMsg:= CONCAT('Error closing Json File. E:', TO_STRING(nErrId));
                END_IF
                Step := Step + 1;
@@ -176,7 +176,7 @@ CASE Step OF
         IF (jsonDoc <> 0) AND NOT (bfbJsonExceptionRaised) THEN
             Step := 20;
         ELSE
-            Step := 900 + Step;
+            Step := PMPS_GVL.JSON_STEP_ERR_OFFSET + Step;
             nErrId := Step;
             bError := TRUE;
             sErrMsg:= CONCAT('Error Parsing JSON Data. S:',TO_STRING(nErrId));
@@ -190,13 +190,13 @@ CASE Step OF
             IF jsonProp <> 0 THEN
                 Step := Step+1;
                 ELSE
-                    Step := 900 + Step;
+                    Step := PMPS_GVL.JSON_STEP_ERR_OFFSET + Step;
                     nErrId := Step;
                     bError := TRUE;
                     sErrMsg:=  CONCAT('Error Loading PLC data from Json File : ',sPLCName);
                 END_IF
         ELSE
-            Step := 900 + Step;
+            Step := PMPS_GVL.JSON_STEP_ERR_OFFSET + Step;
             nErrId := Step;
             bError := TRUE;
             sErrMsg:=  CONCAT('Error PLC name not found in Json File : ',sPLCName);
@@ -218,7 +218,7 @@ CASE Step OF
 END_CASE
 
 //Fault in error state
-IF(Step>=900) THEN
+IF(Step >= PMPS_GVL.JSON_STEP_ERR_OFFSET) THEN
     FFO.i_xOK := FALSE;
     bBusy:=FALSE;
     Step:=0;

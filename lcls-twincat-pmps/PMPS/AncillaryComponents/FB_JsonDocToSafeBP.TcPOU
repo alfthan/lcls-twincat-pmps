@@ -40,7 +40,7 @@ VAR
     (*FFO*)
     FFO    :    FB_FastFault :=(
         i_Desc := 'Fault occurs when there is an error loading safe beam parameters from json file',
-        i_TypeCode := 16#FF13);
+        i_TypeCode := PMPS_GVL.FF_TYPE_JSON_LOAD);
     sbuffReadSmall: INT;
 END_VAR
 ]]></Declaration>
@@ -49,41 +49,41 @@ END_VAR
 RisingEdge(CLK:=bExecute);
 
 CASE Step OF
-    0:     (* Idle state *)
+    PMPS_GVL.JSON_STEP_IDLE:     (* Idle state *)
           IF RisingEdge.Q THEN
                bBusy := TRUE;
                bError:= FALSE;
                nErrId:=0;
                sErrMsg :='';
-               Step := 20;
+               Step := PMPS_GVL.JSON_STEP_FIND_DEVICE;
                fbLogger(sMsg:='Start Parsing Json DOC.', eSevr:=TcEventSeverity.Info);
           END_IF
 
-     20: (*Find the Device Name*)
+     PMPS_GVL.JSON_STEP_FIND_DEVICE: (*Find the Device Name*)
         bHasDevice := fbJson.HasMember(jsonDoc, sDeviceName);
         IF (bHasDevice) THEN
             jsonProp := fbJson.FindMember(jsonDoc, sDeviceName);
             IF jsonProp <> 0 THEN
                 Step := Step+1;
                 ELSE
-                    Step := 900 + Step;
+                    Step := PMPS_GVL.JSON_STEP_ERR_OFFSET + Step;
                     nErrId := Step;
                     bError := TRUE;
                     sErrMsg:=  CONCAT('Error device name not found in Json File : ',sDeviceName);
                 END_IF
         ELSE
-            Step := 900 + Step;
+            Step := PMPS_GVL.JSON_STEP_ERR_OFFSET + Step;
             nErrId := Step;
             bError := TRUE;
             sErrMsg:=  CONCAT('Error device name not found in Json File : ',sDeviceName);
         END_IF
 
-     21: (*Check device States in DOM*)
+     PMPS_GVL.JSON_STEP_CHECK_STATES: (*Check device States in DOM*)
              nStateCount :=0;
              FOR Index:=LOWER_BOUND(arrStates,1) TO UPPER_BOUND(arrStates,1) BY 1 DO
                   IF NOT ((arrStates[Index].sPmpsState= '') OR (arrStates[Index].sPmpsState= 'Invalid')) THEN
                       IF NOT (fbJson.HasMember(jsonProp, arrStates[Index].sPmpsState)) THEN
-                              Step := 900+ Step;
+                              Step := PMPS_GVL.JSON_STEP_ERR_OFFSET + Step;
                               nErrId := Step;
                               bError := TRUE;
                               sErrMsg:= CONCAT('Error loading device state in Json File : ',arrStates[Index].sPmpsState);
@@ -100,10 +100,10 @@ CASE Step OF
 
            Step := Step+1;
 
-     22: //Make sure state array input has State name data
+     PMPS_GVL.JSON_STEP_CHECK_STATE_ARRAY: //Make sure state array input has State name data
           IF (nStateCount =0) THEN
               bHasAllStates :=FALSE;
-              Step := 900+ Step;
+              Step := PMPS_GVL.JSON_STEP_ERR_OFFSET + Step;
               nErrId := Step;
               bError := TRUE;
               sErrMsg:= CONCAT('Error Input State array is empty : ',sDeviceName);
@@ -111,11 +111,11 @@ CASE Step OF
              Step := Step+1;
          END_IF;
 
-     23:  (*loop Device State Arrays to find load all States BP*)
+     PMPS_GVL.JSON_STEP_LOAD_STATES:  (*loop Device State Arrays to find load all States BP*)
           FOR Index:=LOWER_BOUND(arrStates,1) TO UPPER_BOUND(arrStates,1) BY 1 DO
               IF NOT (arrStates[Index].sPmpsState= '') THEN
                   IF(NOT M_LoadSafeBP(arrStates[Index].sPmpsState, Index)) THEN
-                      Step := 900+ Step;
+                      Step := PMPS_GVL.JSON_STEP_ERR_OFFSET + Step;
                       fbLogger.sMsg := CONCAT('Error Parsing beam parameters - Device/States: ', arrStates[Index].sPmpsState);
                       fbLogger(sMsg:= sErrMsg, eSevr:=TcEventSeverity.Critical);
                   END_IF
@@ -123,27 +123,27 @@ CASE Step OF
                     EXIT;
                END_IF
           END_FOR
-          IF (bHasAllParameters) THEN Step := 30;
-              ELSE Step := 900+ Step;
+          IF (bHasAllParameters) THEN Step := PMPS_GVL.JSON_STEP_COMPLETE;
+              ELSE Step := PMPS_GVL.JSON_STEP_ERR_OFFSET + Step;
           END_IF
 
-     30: (*ALL good here*)
+     PMPS_GVL.JSON_STEP_COMPLETE: (*ALL good here*)
          fbLogger.sMsg := CONCAT('Complete Parsing Json Doc. Device: ', sDeviceName);
         fbLogger.sMsg := CONCAT(fbLogger.sMsg ,' - States Count: ');
         fbLogger.sMsg := CONCAT(fbLogger.sMsg ,TO_STRING(nStateCount));
           fbLogger(eSevr:=TcEventSeverity.Info);
          bExecute:= FALSE;
         bBusy:=FALSE;
-        Step := 0;
+        Step := PMPS_GVL.JSON_STEP_IDLE;
         FFO.i_xOK := TRUE;
 END_CASE
 
 
 //Fault in error state
-IF(Step>=900) THEN
+IF(Step >= PMPS_GVL.JSON_STEP_ERR_OFFSET) THEN
     FFO.i_xOK := FALSE;
     bBusy:=FALSE;
-    Step:=0;
+    Step := PMPS_GVL.JSON_STEP_IDLE;
 END_IF
 ACT_FFO();
 ACT_LOGGER();]]></ST>
@@ -276,7 +276,7 @@ IF bHasAllParameters THEN
 END_IF
 
 IF NOT(	bHasAllParameters) THEN
-    nErrId := 900+Step;
+    nErrId := PMPS_GVL.JSON_STEP_ERR_OFFSET + Step;
     bError := TRUE;
     sErrMsg:= CONCAT('Error loading BP Data - Device-State: ',sStateName);
     fbLogger(sMsg:= sErrMsg, eSevr:=TcEventSeverity.Critical);
