@@ -144,7 +144,7 @@
       <SubType>Code</SubType>
       <LinkAlways>true</LinkAlways>
     </Compile>
-    <Compile Include="GVLs\PMPS_TOOLS.TcGVL">
+    <Compile Include="GVLs\PMPS_TOOLS_GVL.TcGVL">
       <SubType>Code</SubType>
       <LinkAlways>true</LinkAlways>
     </Compile>

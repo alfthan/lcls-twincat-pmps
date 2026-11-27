@@ -13,16 +13,16 @@ END_VAR
 ]]></Declaration>
     <Implementation>
       <ST><![CDATA[
-PMPS_TOOLS.fbJson.StartObject();
-PMPS_TOOLS.fbJson.AddKey('pmps_typecode');
-PMPS_TOOLS.fbJson.AddUdint(nTypeCode);
-PMPS_TOOLS.fbJson.AddKey('pmps_path');
-PMPS_TOOLS.fbJson.AddString(sPath);
-PMPS_TOOLS.fbJson.AddKey('pmps_device_name');
-PMPS_TOOLS.fbJson.AddString(sDevName);
-PMPS_TOOLS.fbJson.EndObject();
-F_PMPS_JSON := PMPS_TOOLS.fbJson.GetDocument();
-PMPS_TOOLS.fbJson.ResetDocument();]]></ST>
+PMPS_TOOLS_GVL.fbJson.StartObject();
+PMPS_TOOLS_GVL.fbJson.AddKey('pmps_typecode');
+PMPS_TOOLS_GVL.fbJson.AddUdint(nTypeCode);
+PMPS_TOOLS_GVL.fbJson.AddKey('pmps_path');
+PMPS_TOOLS_GVL.fbJson.AddString(sPath);
+PMPS_TOOLS_GVL.fbJson.AddKey('pmps_device_name');
+PMPS_TOOLS_GVL.fbJson.AddString(sDevName);
+PMPS_TOOLS_GVL.fbJson.EndObject();
+F_PMPS_JSON := PMPS_TOOLS_GVL.fbJson.GetDocument();
+PMPS_TOOLS_GVL.fbJson.ResetDocument();]]></ST>
     </Implementation>
   </POU>
 </TcPlcObject>
