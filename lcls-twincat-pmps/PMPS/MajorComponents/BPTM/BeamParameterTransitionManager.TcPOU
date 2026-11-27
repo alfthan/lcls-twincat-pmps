@@ -95,6 +95,15 @@ VAR CONSTANT
 END_VAR]]></Declaration>
     <Implementation>
       <ST><![CDATA[
+// Validate the externally supplied arbiter reference before any dereference: the
+// state machine below reads fbArbiter.nEntryCount and calls its request methods,
+// so an unbound reference would fault the PLC.
+IF NOT __ISVALIDREF(fbArbiter) THEN
+    bError := TRUE;
+    nErrId := PMPS_CODES.InvalidReference;
+    RETURN;
+END_IF
+
 // Logic for retry button
 rtRetry(CLK:=bRetry);
 bRetry := FALSE;

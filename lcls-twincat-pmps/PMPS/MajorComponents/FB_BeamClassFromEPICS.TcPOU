@@ -46,7 +46,16 @@ VAR CONSTANT
 END_VAR
 ]]></Declaration>
     <Implementation>
-      <ST><![CDATA[fbMPS_BeamClass();
+      <ST><![CDATA[// Validate the externally supplied references before any dereference: BP is
+// written, the beam class readback block is called and the fast fault registers
+// into FFO below. An unbound reference would fault the PLC.
+IF NOT (__ISVALIDREF(BP) AND __ISVALIDREF(fbMPS_BeamClass)
+    AND __ISVALIDREF(FFO)) THEN
+    xError := TRUE;
+    RETURN;
+END_IF
+
+fbMPS_BeamClass();
 
 IF fbMPS_BeamClass.bValid THEN
     BP.nBeamClass := LREAL_TO_USINT(fbMPS_BeamClass.fValue);

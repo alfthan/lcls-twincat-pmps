@@ -43,6 +43,10 @@ VAR
         i_TypeCode := 16#FF13);
     sbuffReadSmall: INT;
 END_VAR
+VAR CONSTANT
+    // Error ID reported when io_fbFFHWO is not assigned to a valid FFO instance
+    cErrInvalidFfoRef : UDINT := 999;
+END_VAR
 ]]></Declaration>
     <Implementation>
       <ST><![CDATA[(* Retrieve JSON content *)
@@ -151,11 +155,21 @@ ACT_LOGGER();]]></ST>
     <Action Name="ACT_FFO" Id="{6e9a2bc2-3984-4ee7-a4d8-2cc5196ce941}">
       <Implementation>
         <ST><![CDATA[(*FAST FAULT*)
-FFO(i_xOK := ,
-    i_xReset := ,
-    i_xAutoReset :=TRUE,
-    i_DevName := sDeviceName,
-    io_fbFFHWO := io_fbFFHWO);]]></ST>
+// Validate the externally supplied FFO reference before calling through it: an
+// unbound reference would fault the PLC inside FB_FastFault. Report the wiring
+// error instead and leave the fast fault output at its safe (faulted) state.
+IF NOT __ISVALIDREF(io_fbFFHWO) THEN
+    bError := TRUE;
+    nErrId := cErrInvalidFfoRef;
+    sErrMsg := 'FFO reference not assigned to FB_JsonDocToSafeBP';
+    bBusy := FALSE;
+ELSE
+    FFO(i_xOK := ,
+        i_xReset := ,
+        i_xAutoReset :=TRUE,
+        i_DevName := sDeviceName,
+        io_fbFFHWO := io_fbFFHWO);
+END_IF]]></ST>
       </Implementation>
     </Action>
     <Action Name="ACT_Logger" Id="{c3c66974-0909-40ca-a807-54171804b0f6}">

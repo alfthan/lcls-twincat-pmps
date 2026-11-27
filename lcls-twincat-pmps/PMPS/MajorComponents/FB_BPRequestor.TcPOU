@@ -21,7 +21,14 @@ VAR
 END_VAR
 ]]></Declaration>
     <Implementation>
-      <ST><![CDATA[Arbiter.ElevateRequest(THIS^); // Executes arbitration and retrieves ReqBP
+      <ST><![CDATA[// Validate the externally supplied arbiter reference before dereferencing it: the
+// elevation call below would fault the PLC on an unbound reference. Hold the last
+// arbitrated BP rather than publishing an unarbitrated one.
+IF NOT __ISVALIDREF(Arbiter) THEN
+    RETURN;
+END_IF
+
+Arbiter.ElevateRequest(THIS^); // Executes arbitration and retrieves ReqBP
 
 IF nRequestCohort >= nCohort THEN
     // Update requested BP set

@@ -92,7 +92,16 @@ VAR
 END_VAR
 ]]></Declaration>
     <Implementation>
-      <ST><![CDATA[//Receiving current BP state
+      <ST><![CDATA[// Validate the externally supplied references before any dereference: the veto
+// arbiter call and the bridge fast fault below use Arbiter/fbFFHWO, so an unbound
+// reference would fault the PLC. Report the bridge as bad and skip this cycle.
+IF NOT (__ISVALIDREF(Arbiter) AND __ISVALIDREF(fbFFHWO)) THEN
+    bBridgeOk := FALSE;
+    bBridgeConfirmedBad := TRUE;
+    RETURN;
+END_IF
+
+//Receiving current BP state
 PMPS_GVL.stCurrentBeamParameters := IO_TO_BP(i_stCurrentBP);
 PMPS_GVL.stCurrentBeamParameters.xValidToggle := xTxPDO_toggle; // This line must follow the one above. Sequence is important.
 

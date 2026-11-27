@@ -30,6 +30,14 @@ END_VAR
 ]]></Declaration>
     <Implementation>
       <ST><![CDATA[
+// Validate the externally supplied references before any dereference: the lower
+// authority is invoked and the fast fault registers into FFO below, so an unbound
+// reference would fault the PLC instead of failing safely.
+IF NOT (__ISVALIDREF(HigherAuthority) AND __ISVALIDREF(LowerAuthority)
+    AND __ISVALIDREF(FFO)) THEN
+    RETURN;
+END_IF
+
 rtVeto(CLK:=bVeto);
 ftVeto(CLK:=bVeto);
 LowerAuthority.bLowerAuthorityVetoed := bVeto;
@@ -61,8 +69,11 @@ END_VAR
         <ST><![CDATA[
 IF bVeto THEN
     CheckRequest := TRUE;
-ELSE
+ELSIF __ISVALIDREF(HigherAuthority) THEN
     CheckRequest := HigherAuthority.CheckRequest(nReqID);
+ELSE
+    // No higher authority wired: nothing is confirmed, so stay unconfirmed (safe)
+    CheckRequest := FALSE;
 END_IF]]></ST>
       </Implementation>
     </Method>
@@ -78,8 +89,11 @@ END_VAR
         <ST><![CDATA[
 IF bVeto THEN
     RemoveRequest := TRUE;
-ELSE
+ELSIF __ISVALIDREF(HigherAuthority) THEN
     RemoveRequest := HigherAuthority.RemoveRequest(nReqID);
+ELSE
+    // No higher authority wired: nothing to remove from
+    RemoveRequest := FALSE;
 END_IF
 ]]></ST>
       </Implementation>
@@ -95,11 +109,14 @@ END_VAR
 ]]></Declaration>
       <Implementation>
         <ST><![CDATA[
-IF NOT bVeto THEN
+IF bVeto THEN
+    RequestBP := TRUE;
+ELSIF __ISVALIDREF(HigherAuthority) THEN
     // Pass request along to higher authority
     RequestBP := HigherAuthority.RequestBP(nReqID, stReqBP);
 ELSE
-    RequestBP := TRUE;
+    // No higher authority wired: the request was not accepted
+    RequestBP := FALSE;
 END_IF
 
 IF RequestBP THEN

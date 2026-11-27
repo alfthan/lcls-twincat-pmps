@@ -18,7 +18,8 @@ TYPE PMPS_CODES :
         BadTransID := 16#301,
         TransAssrtFail := 16#302,
         FinalAssrtFail := 16#303,
-        NoRoomInArb := 16#304
+        NoRoomInArb := 16#304,
+        InvalidReference := 16#305 // A required VAR_IN_OUT/REFERENCE input is not assigned
 ) UINT;
 END_TYPE
 ]]></Declaration>

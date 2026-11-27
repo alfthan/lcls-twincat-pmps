@@ -17,7 +17,14 @@ VAR
 END_VAR
 ]]></Declaration>
     <Implementation>
-      <ST><![CDATA[stDeviceState.nStateRef := nStateRef;
+      <ST><![CDATA[// Validate the externally supplied table reference before any dereference: an
+// unbound reference would fault the PLC instead of reporting a failed write.
+IF NOT __ISVALIDREF(Table) THEN
+    F_SetStateParams := FALSE;
+    RETURN;
+END_IF
+
+stDeviceState.nStateRef := nStateRef;
 stDeviceState.rPosition := rPosition;
 stDeviceState.rTolerance := rTolerance;
 stDeviceState.stReqBeamParam := stBeamParams;

@@ -79,6 +79,19 @@ END_VAR
 ]]></Declaration>
     <Implementation>
       <ST><![CDATA[
+// Validate the externally supplied references before any dereference: the device
+// struct is read, the arbiter is queried and the fast faults register into
+// FastFaultOutput below. Force the permit/fault outputs to their safe state and
+// do nothing else while any of them is unbound.
+IF NOT (__ISVALIDREF(stDevice) AND __ISVALIDREF(Arbiter)
+    AND __ISVALIDREF(FastFaultOutput)) THEN
+    q_xTransitionPermitted := FALSE;
+    q_xFault := TRUE;
+    mcPower.Enable_Positive := FALSE;
+    mcPower.Enable_Negative := FALSE;
+    RETURN;
+END_IF
+
 lrPosition := stDevice.stAxis.NcToPlc.ActPos; //Actuator position
 
 stDevice.stAxis.ReadStatus();

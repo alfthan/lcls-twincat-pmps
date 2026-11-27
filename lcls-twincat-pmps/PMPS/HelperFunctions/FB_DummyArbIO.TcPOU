@@ -45,7 +45,11 @@ END_VAR
 ]]></Declaration>
     <Implementation>
       <ST><![CDATA[
-LA.ElevateRequest(THIS^);
+// Validate the externally supplied lower authority interface before calling
+// through it: an unbound interface would fault the PLC.
+IF __ISVALIDREF(LA) THEN
+    LA.ElevateRequest(THIS^);
+END_IF
 
 ApplyBPReq(FALSE); //If autoupdate is set, this will propagate the request to PMPS_GVL.stCurrentBP;
 ]]></ST>
@@ -101,9 +105,16 @@ ELSIF bAutoUpdateBP THEN
     IF tonSatt.Q THEN q_stSimulatedBPReadback.astAttenuators := stReqOutBP.astAttenuators; END_IF
 END_IF
 
-ffo.ExecuteNoLog();
+// Validate the externally supplied FFO reference before calling through it: an
+// unbound reference would fault the PLC. Without a valid fast fault output the
+// simulated readback cannot be trusted, so hold the rate at zero (beam off).
+IF __ISVALIDREF(FFO) THEN
+    ffo.ExecuteNoLog();
 
-IF NOT ffo.q_xFastFaultOut THEN q_stSimulatedBPReadback.nRate := 0; END_IF]]></ST>
+    IF NOT ffo.q_xFastFaultOut THEN q_stSimulatedBPReadback.nRate := 0; END_IF
+ELSE
+    q_stSimulatedBPReadback.nRate := 0;
+END_IF]]></ST>
       </Implementation>
     </Method>
     <Property Name="AutoUpdateBP" Id="{2d5cb5c0-e6e6-466f-ae2e-a59433cf2c5e}">

@@ -49,7 +49,16 @@ VAR
 END_VAR
 ]]></Declaration>
     <Implementation>
-      <ST><![CDATA[IF xInit    THEN
+      <ST><![CDATA[// Validate the externally supplied fast fault output reference before any
+// dereference: Register/IdxCheckIn on an unbound reference would fault the PLC.
+// Fail safe: the fast fault line stays FALSE (faulted) and this block contributes
+// nothing until the caller assigns a valid FFO.
+IF NOT __ISVALIDREF(io_fbFFHWO) THEN
+    o_xFFLine := FALSE;
+    RETURN;
+END_IF
+
+IF xInit    THEN
     FFInfo.sPath := sPath;
     FFInfo.InUse := True;
     FFInfo.TypeCode := i_TypeCode;

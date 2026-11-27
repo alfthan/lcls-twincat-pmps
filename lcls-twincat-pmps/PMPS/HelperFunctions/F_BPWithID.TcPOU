@@ -11,7 +11,15 @@ VAR
 END_VAR
 ]]></Declaration>
     <Implementation>
-      <ST><![CDATA[MEMCPY(ADR(F_BPWithID), ADR(BP), SIZEOF(BP));
+      <ST><![CDATA[// Validate the externally supplied BP reference before dereferencing it: an
+// unbound reference would copy from an undefined address and corrupt the result.
+// Return the default struct (all zero, nId = 0) so the caller sees no valid entry.
+IF NOT __ISVALIDREF(BP) THEN
+    F_BPWithID.nId := 0;
+    RETURN;
+END_IF
+
+MEMCPY(ADR(F_BPWithID), ADR(BP), SIZEOF(BP));
 F_BPWithID.nId := ID;]]></ST>
     </Implementation>
   </POU>
