@@ -54,6 +54,8 @@ VAR_GLOBAL CONSTANT
 
     AUX_ATTENUATORS : UINT := 16; // Maximum # of attenuators in the PMPS
     MAX_VETO_DEVICES   :   UINT := 16;
+    MAX_RATE : UDINT := 1000000; // Highest pulse rate the PMPS can carry [Hz]; clamps requested nRate and sizes the full-beam constant
+    MAX_BC_RANGE : WORD := 32767; // Full set of beam-class bits (2#0111_1111_1111_1111); clamps requested nBCRange and sizes the full-beam constant
     stAttenuators : ST_PMPS_Attenuator :=(nTran:=1,xAttOK:=1);
     {attribute 'pytmc' := '
         pv: @(PREFIX)FullBeamCnst
@@ -64,8 +66,8 @@ VAR_GLOBAL CONSTANT
     cstFullBeam    :    ST_BeamParams := (
         nTran := 1,
         neVRange :=  2#1111_1111_1111_1111_1111_1111_1111_1111,
-        nRate    := UDINT#1000000,
-        nBCRange := 2#0111_1111_1111_1111,
+        nRate    := PMPS_GVL.MAX_RATE,
+        nBCRange := PMPS_GVL.MAX_BC_RANGE,
         astApertures := [(Width:=1E3, Height:=1E3), (Width:=1E3, Height:=1E3),(Width:=1E3, Height:=1E3),(Width:=1E3, Height:=1E3)],
         astAttenuators :=  [PMPS_GVL.AUX_ATTENUATORS(stAttenuators)]
 
