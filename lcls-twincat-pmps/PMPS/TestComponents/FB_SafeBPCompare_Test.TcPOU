@@ -171,12 +171,12 @@ AssertFalse(
     'Attenuation eval is broken (False)');
 
 // Check at margin threshold
-stSafer.nTran := 0.99 * stNotSoSafe.nTran*(PMPS_GVL.TRANS_SCALING_FACTOR + PMPS_PARAM.TRANS_MARGIN)/PMPS_GVL.TRANS_SCALING_FACTOR;
+stSafer.nTran := 0.99 * stNotSoSafe.nTran*(PMPS_GVL.TRANS_SCALING_FACTOR + PMPS_PARAM_GVL.TRANS_MARGIN)/PMPS_GVL.TRANS_SCALING_FACTOR;
 AssertTrue(
     F_SafeBPCompare(stSafer, stNotSoSafe),
     'Attenuation eval is broken: should be safe up to margin.');
 
-stSafer.nTran := 1 + stNotSoSafe.nTran*(PMPS_GVL.TRANS_SCALING_FACTOR + PMPS_PARAM.TRANS_MARGIN)/PMPS_GVL.TRANS_SCALING_FACTOR;
+stSafer.nTran := 1 + stNotSoSafe.nTran*(PMPS_GVL.TRANS_SCALING_FACTOR + PMPS_PARAM_GVL.TRANS_MARGIN)/PMPS_GVL.TRANS_SCALING_FACTOR;
 
 AssertFalse(
     F_SafeBPCompare(stSafer, stNotSoSafe),
@@ -223,7 +223,7 @@ FOR idx:=1 TO PMPS_GVL.AUX_ATTENUATORS DO
     xFailedTest S= xResult;
 
     // Check at margin threshold
-        stSafer.astAttenuators[idx].nTran := stNotSoSafe.astAttenuators[idx].nTran*(PMPS_GVL.TRANS_SCALING_FACTOR + PMPS_PARAM.TRANS_MARGIN)/PMPS_GVL.TRANS_SCALING_FACTOR;
+        stSafer.astAttenuators[idx].nTran := stNotSoSafe.astAttenuators[idx].nTran*(PMPS_GVL.TRANS_SCALING_FACTOR + PMPS_PARAM_GVL.TRANS_MARGIN)/PMPS_GVL.TRANS_SCALING_FACTOR;
 
         xResult := F_SafeBPCompare(stSafer, stNotSoSafe);
 
@@ -232,7 +232,7 @@ FOR idx:=1 TO PMPS_GVL.AUX_ATTENUATORS DO
             'Attenuation eval is broken: should be safe up to margin.');
         xFailedTest S= NOT xResult;
 
-        stSafer.astAttenuators[idx].nTran := 1 + stNotSoSafe.astAttenuators[idx].nTran*(PMPS_GVL.TRANS_SCALING_FACTOR + PMPS_PARAM.TRANS_MARGIN)/PMPS_GVL.TRANS_SCALING_FACTOR;
+        stSafer.astAttenuators[idx].nTran := 1 + stNotSoSafe.astAttenuators[idx].nTran*(PMPS_GVL.TRANS_SCALING_FACTOR + PMPS_PARAM_GVL.TRANS_MARGIN)/PMPS_GVL.TRANS_SCALING_FACTOR;
 
         xResult := F_SafeBPCompare(stSafer, stNotSoSafe);
         AssertFalse(

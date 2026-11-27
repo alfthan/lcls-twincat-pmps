@@ -5,7 +5,7 @@
 {attribute 'no_check'}
 FUNCTION_BLOCK FB_HardwareFFOutput
 VAR CONSTANT
-    FF_ARRAY_UPPER_BOUND : UINT := PMPS_PARAM.MAX_FAST_FAULTS;
+    FF_ARRAY_UPPER_BOUND : UINT := PMPS_PARAM_GVL.MAX_FAST_FAULTS;
 END_VAR
 VAR_INPUT
     {attribute 'pytmc' := '
@@ -72,7 +72,7 @@ VAR
     fbLogger : FB_LogMessage := (
         eSevr := TcEventSeverity.Critical,
         eSubsystem := E_Subsystem.MPS,
-        nMinTimeViolationAcceptable := PMPS_PARAM.MAX_FAST_FAULTS);
+        nMinTimeViolationAcceptable := PMPS_PARAM_GVL.MAX_FAST_FAULTS);
 
 END_VAR]]></Declaration>
     <Implementation>

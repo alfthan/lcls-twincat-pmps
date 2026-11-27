@@ -139,7 +139,7 @@ IF NOT THIS^.fbBPAssertionPool.bOk THEN
             sJson := F_PMPS_JSON(
                         sArbName,
                         sPath,
-                        PMPS_CODES.ARB_FULL));
+                        E_PMPS_CODES.ARB_FULL));
 ELSIF THIS^.fbBPAssertionPool.bOk AND bVerbose THEN
     fbLog(sMsg:=CONCAT('Added to pool ',DWORD_TO_HEXSTR(nReqID, 4, FALSE)),
             eSevr:=TcEventSeverity.Verbose,

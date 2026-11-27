@@ -48,7 +48,7 @@ END_VAR
         <ST><![CDATA[
 TEST('Arbiter Capcity');
     // Fill the arbiter
-    FOR idx := 1 TO PMPS_PARAM.MAX_ASSERTIONS DO
+    FOR idx := 1 TO PMPS_PARAM_GVL.MAX_ASSERTIONS DO
         fbArbCapacityTest.AddRequest(nReqID := idx, stReqBP := testReq, sDevName:= CONCAT('Device #', TO_STRING(idx)));
     END_FOR
 

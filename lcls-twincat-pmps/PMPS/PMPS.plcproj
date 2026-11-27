@@ -96,7 +96,7 @@
     <Compile Include="DUTs\InternalDUT\T_HashTableEntry.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="DUTs\PMPS_CODES.TcDUT">
+    <Compile Include="DUTs\E_PMPS_CODES.TcDUT">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="DUTs\ST_DeviceState.TcDUT">
@@ -140,11 +140,11 @@
       <SubType>Code</SubType>
       <LinkAlways>true</LinkAlways>
     </Compile>
-    <Compile Include="GVLs\PMPS_PARAM.TcGVL">
+    <Compile Include="GVLs\PMPS_PARAM_GVL.TcGVL">
       <SubType>Code</SubType>
       <LinkAlways>true</LinkAlways>
     </Compile>
-    <Compile Include="GVLs\PMPS_TOOLS.TcGVL">
+    <Compile Include="GVLs\PMPS_TOOLS_GVL.TcGVL">
       <SubType>Code</SubType>
       <LinkAlways>true</LinkAlways>
     </Compile>

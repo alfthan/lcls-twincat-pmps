@@ -78,7 +78,7 @@ IF bcResidual <> 0 AND bLogOneShot THEN
     fbLog.sJson := F_PMPS_JSON(
         CONCAT(fbGetHN.sHostName, sDevName),
         sPath,
-        PMPS_CODES.PEW_FAULT);
+        E_PMPS_CODES.PEW_FAULT);
 
     fbStr.arg1 := F_DWORD(bcResidual);
     fbStr.arg2 := F_WORD(i_stCurrentBeamParams.nBCRange);

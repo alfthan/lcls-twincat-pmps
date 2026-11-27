@@ -1,9 +1,9 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
-  <DUT Name="PMPS_CODES" Id="{a478420e-6a59-487b-89cb-8d5f4267d9aa}">
+  <DUT Name="E_PMPS_CODES" Id="{a478420e-6a59-487b-89cb-8d5f4267d9aa}">
     <Declaration><![CDATA[{attribute 'qualified_only'}
 {attribute 'strict'}
-TYPE PMPS_CODES :
+TYPE E_PMPS_CODES :
 (
     FAST_FAULT := 16#1, // Generic fast fault
     PEW_FAULT := 16#7, // Fault occurs when the calculated machine photon energy (K value calculated by undulator gap, and electron energy) falls outside the permitted range.

@@ -144,13 +144,13 @@ CASE eBPTMState OF
         END_IF
 
     RequestBP:
-        IF PMPS_PARAM.MAX_ASSERTIONS - fbArbiter.nEntryCount >= cReqArbCapacity THEN
+        IF PMPS_PARAM_GVL.MAX_ASSERTIONS - fbArbiter.nEntryCount >= cReqArbCapacity THEN
             AssertTransitionBP();
             AssertFinalBP();
             eBPTMState := E_BPTMState.WaitForBP;
         ELSE
             LogActions('Arbiter at capacity, leaving space for other BPTM to finish.');
-            nErrId := PMPS_CODES.NoRoomInArb;
+            nErrId := E_PMPS_CODES.NoRoomInArb;
             bError := TRUE;
         END_IF
 
@@ -225,7 +225,7 @@ IF bFinalAssertionFailed THEN
     nAssrtAttempt := nAssrtAttempt + 1;
     IF nAssrtAttempt > cMaxAttempts THEN
         bError := TRUE;
-        nErrID := PMPS_CODES.FinalAssrtFail;
+        nErrID := E_PMPS_CODES.FinalAssrtFail;
     END_IF
 ELSE
     // Remembering final assertionID for removal later
@@ -253,7 +253,7 @@ IF bTransAssertionFailed THEN
     nAssrtAttempt := nAssrtAttempt + 1;
     IF nAssrtAttempt > cMaxAttempts THEN
         bError := TRUE;
-        nErrID := PMPS_CODES.TransAssrtFail;
+        nErrID := E_PMPS_CODES.TransAssrtFail;
     END_IF
 END_IF
     ]]></ST>
@@ -322,7 +322,7 @@ IF fbArbiter.nEntryCount < cReqArbCapacity THEN
         nAssrtAttempt := nAssrtAttempt + 1;
         IF nAssrtAttempt > cMaxAttempts THEN
             bError := TRUE;
-            nErrID := PMPS_CODES.TransAssrtFail;
+            nErrID := E_PMPS_CODES.TransAssrtFail;
         END_IF
     END_IF
 
@@ -349,9 +349,9 @@ IF F_ValidReqID(i_nRequestedAssertionID) AND
 ELSE
     IF NOT F_ValidReqID(i_nRequestedAssertionID) THEN
 
-        nErrID := PMPS_CODES.BadTargetID;
+        nErrID := E_PMPS_CODES.BadTargetID;
     ELSIF NOT F_ValidReqID(i_TransitionAssertionID) THEN
-        nErrID := PMPS_CODES.BadTransID;
+        nErrID := E_PMPS_CODES.BadTransID;
     END_IF
     LogActions('Error in set new target');
     bError := TRUE;
