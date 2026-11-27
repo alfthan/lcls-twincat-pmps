@@ -16,7 +16,7 @@ VAR_IN_OUT
     iq_stMachineParams    :    ST_BeamParams;
 END_VAR
 VAR
-    nTargetTran: REAL;
+    fTargetTran: REAL;
     tonTranTimer    :    TON := (
         PT := T#2S
         );
@@ -30,13 +30,13 @@ END_VAR
       <ST><![CDATA[
 //Attenuation
 IF xEnableAtt THEN
-    IF i_stAssertedParams.nTran <> nTargetTran THEN
+    IF i_stAssertedParams.nTran <> fTargetTran THEN
         tonTranTimer(IN:=FALSE);
-        nTargetTran := i_stAssertedParams.nTran;
+        fTargetTran := i_stAssertedParams.nTran;
     ELSIF NOT tonTranTimer.Q THEN
         tonTranTimer(IN:=TRUE);
     ELSE
-        iq_stMachineParams.nTran := nTargetTran;
+        iq_stMachineParams.nTran := fTargetTran;
     END_IF
 END_IF
 
