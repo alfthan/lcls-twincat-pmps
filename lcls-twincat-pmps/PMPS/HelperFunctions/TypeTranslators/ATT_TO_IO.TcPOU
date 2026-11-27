@@ -1,16 +1,68 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <POU Name="ATT_TO_IO" Id="{18b528b7-b147-4652-8142-65b2d820ca1f}" SpecialFunc="None">
-    <Declaration><![CDATA[FUNCTION ATT_TO_IO : ST_PMPS_Attenuator_IO
+    <Declaration><![CDATA[(*
+ATT_TO_IO : convert an internal attenuator record to its EPICS-facing IO form.
+
+Purpose:
+    Copy ST_PMPS_Attenuator - the internal beam-parameter attenuator record -
+    into the plain ST_PMPS_Attenuator_IO struct that crosses the IO boundary
+    and is published to EPICS. ST_PMPS_Attenuator EXTENDS
+    ST_PMPS_Attenuator_IO and adds only pytmc metadata (pv: Att with EGU %,
+    pv: OK), so the conversion is a field-for-field copy of nTran and xAttOK
+    with no scaling, clamping or interpretation applied along the way.
+
+Usage:
+    Called once per attenuator slot while a whole beam-parameter set is being
+    published, from BP_TO_IO:
+
+        BP_TO_IO.astAttenuators[idx] := ATT_TO_IO(BP.astAttenuators[idx]);
+
+    A pure combinational helper: it holds no state, uses no timers, raises no
+    fault and performs no validity check, so it is safe to call every scan.
+    Deciding whether the transmission it reports is safe to publish is the
+    caller's job (see F_AttenuatorOK and F_SafeBPCompare).
+
+Objectives:
+    - One place that names the attenuator field mapping between the internal
+      record and the IO record, instead of each IO boundary copying by hand.
+    - Keep the IO struct from drifting from the internal record: the two
+      assignments mirror ST_PMPS_Attenuator_IO member-for-member.
+    - Carry units across unchanged - the copy must never rescale.
+
+Returns (ST_PMPS_Attenuator_IO) - each field is also commented where it is
+assigned in the implementation:
+    nTran : UINT - attenuator transmission, reported as a percentage value
+            (pytmc declares EGU % on ST_PMPS_Attenuator). Copied unchanged,
+            so no unit conversion happens here.
+    xAttOK : UINT - attenuator health flag with boolean meaning: non-zero
+            when the attenuator reports no errors and is stable, zero when
+            it is not known-good (per ST_PMPS_Attenuator).
+
+History:
+    2020-05-21  Alex Wallace : Created - preparing for the addition of BP
+                               elements; changed from nAtt to nTran when
+                               PMPS switched to transmission (2020-07-07).
+    2026-11-27  Scirix Agent : Header given purpose, usage, objectives and
+                               the returned field contract, plus inline
+                               comments on the input and the copied fields.
+                               Comments only - no code change (audit
+                               finding #391).
+*)
+FUNCTION ATT_TO_IO : ST_PMPS_Attenuator_IO
 VAR_INPUT
+    // Attenuator record to convert: the internal ST_PMPS_Attenuator, i.e.
+    // ST_PMPS_Attenuator_IO plus the pytmc PV metadata. nTran carries the
+    // transmission as a percentage value (EGU % as declared there) and xAttOK
+    // the health flag (non-zero = no errors and stable; no units).
     Att : ST_PMPS_Attenuator;
 END_VAR
 VAR
 END_VAR
 ]]></Declaration>
     <Implementation>
-      <ST><![CDATA[ATT_TO_IO.nTran := Att.nTran;
-ATT_TO_IO.xAttOK := Att.xAttOK;]]></ST>
+      <ST><![CDATA[ATT_TO_IO.nTran := Att.nTran; // Transmission in percent (EGU %); copied unchanged, never rescaled.
+ATT_TO_IO.xAttOK := Att.xAttOK; // Health flag: non-zero = no errors and attenuator stable.]]></ST>
     </Implementation>
   </POU>
 </TcPlcObject>
