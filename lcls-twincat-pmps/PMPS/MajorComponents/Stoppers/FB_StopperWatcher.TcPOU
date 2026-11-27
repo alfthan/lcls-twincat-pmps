@@ -2,6 +2,8 @@
 <TcPlcObject Version="1.1.0.1">
   <POU Name="FB_StopperWatcher" Id="{a8ba1c9e-0ec9-4e64-9a98-24aa43e040d0}" SpecialFunc="None">
     <Declaration><![CDATA[// Relays stopper state and sends a message when stopper state changes.
+// The caller-supplied Stopper number is validated against the PMPS_GVL veto-device index
+// range before it is used to update stCurrentBP.aVetoDevices.
 FUNCTION_BLOCK FB_StopperWatcher
 VAR_INPUT
 END_VAR
@@ -17,7 +19,7 @@ VAR
     q_StopperOUT_Relay AT %Q* : BOOL;
     q_StopperIN_Relay AT %Q* : BOOL;
 
-    Stopper : UINT;
+    Stopper : UINT; // Index of this stopper in stCurrentBP.aVetoDevices, supplied by the caller
     StopperName : STRING;
     {attribute 'instance-path'}
     {attribute 'noinit'}
@@ -31,6 +33,10 @@ VAR
     rtOut : R_TRIG;
 
     bInit: BOOL := TRUE;
+
+    // One-shot report latch: set once an out-of-range Stopper index has been reported,
+    // re-armed as soon as the configured index is valid again.
+    bIndexFaultReported : BOOL;
 END_VAR
 ]]></Declaration>
     <Implementation>
@@ -44,18 +50,29 @@ rtIn(CLK := i_StopperInLS);
 rtOut(CLK := i_StopperOutLS);
 
 IF rtIn.Q THEN
-    fbLogMsg.sMsg := CONCAT(StopperName, ' moved IN');
-    fbLogMsg();
+    fbLogMsg(sMsg := CONCAT(StopperName, ' moved IN'), eSevr := TcEventSeverity.Verbose);
 ELSIF rtOut.Q THEN
-    fbLogMsg.sMsg := CONCAT(StopperName, ' moved OUT');
-    fbLogMsg();
+    fbLogMsg(sMsg := CONCAT(StopperName, ' moved OUT'), eSevr := TcEventSeverity.Verbose);
 END_IF
 
 q_StopperOUT_Relay := i_StopperOutLS;
 q_StopperIN_Relay := i_StopperInLS;
 
 // Update current beam parameters
-stCurrentBP.aVetoDevices[Stopper] := i_StopperInLS;]]></ST>
+// Stopper is configured by the caller and is used as an index into the shared veto-device
+// array, so validate it against the declared array bounds before indexing. An out-of-range
+// index would write past the end of aVetoDevices and corrupt the adjacent members of
+// stCurrentBP, so reject the value, skip the update and report the misconfiguration once.
+IF (Stopper >= PMPS_GVL.MIN_VETO_DEVICES) AND (Stopper <= PMPS_GVL.MAX_VETO_DEVICES) THEN
+    stCurrentBP.aVetoDevices[Stopper] := i_StopperInLS;
+    bIndexFaultReported := FALSE; // Index is valid, re-arm the one-shot report
+ELSIF NOT bIndexFaultReported THEN
+    fbLogMsg(
+        sMsg := CONCAT(CONCAT(CONCAT(StopperName, ' invalid stopper number '), TO_STRING(Stopper)),
+                       ' - veto device not updated'),
+        eSevr := TcEventSeverity.Critical);
+    bIndexFaultReported := TRUE;
+END_IF]]></ST>
     </Implementation>
   </POU>
 </TcPlcObject>

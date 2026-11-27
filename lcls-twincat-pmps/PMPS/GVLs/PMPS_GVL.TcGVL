@@ -53,7 +53,8 @@ VAR_GLOBAL CONSTANT
     TRANS_SCALING_FACTOR : REAL := REAL#1.0; // Scaling factor for fixed-point transmission
 
     AUX_ATTENUATORS : UINT := 16; // Maximum # of attenuators in the PMPS
-    MAX_VETO_DEVICES   :   UINT := 16;
+    MIN_VETO_DEVICES   :   UINT := 1;  // Lowest valid index in ST_BeamParams.aVetoDevices
+    MAX_VETO_DEVICES   :   UINT := 16; // Highest valid index in ST_BeamParams.aVetoDevices
     stAttenuators : ST_PMPS_Attenuator :=(nTran:=1,xAttOK:=1);
     {attribute 'pytmc' := '
         pv: @(PREFIX)FullBeamCnst

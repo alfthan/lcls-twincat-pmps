@@ -49,7 +49,7 @@
         (* Stoppers *)
         {attribute 'pytmc' := 'pv: Veto
         io: i'}
-        aVetoDevices : ARRAY [1..PMPS_GVL.MAX_VETO_DEVICES] OF BOOL;
+        aVetoDevices : ARRAY [PMPS_GVL.MIN_VETO_DEVICES..PMPS_GVL.MAX_VETO_DEVICES] OF BOOL;
 
         (* Apertures *)
         {attribute 'pytmc' := 'pv: Apt
