@@ -9,6 +9,7 @@ END_VAR
 VAR
     {attribute 'pytmc' := '
         pv: eEnrg
+        io: io
         link: BEND:DMPH:400:BACT
         field: EGU GeV
     '}
@@ -31,6 +32,7 @@ VAR
 
     {attribute 'pytmc' := '
         pv: UND
+        io: io
         link: USEG:UNDH:
     '}
     fbHgvpu : FB_Hgvpu;
