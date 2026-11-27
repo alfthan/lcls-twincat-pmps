@@ -1,12 +1,68 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <POU Name="F_BPWithID" Id="{e3bfa99b-9d0a-4973-9793-594c4c68e1ba}" SpecialFunc="None">
-    <Declaration><![CDATA[FUNCTION F_BPWithID : ST_BP_ArbInternal
+    <Declaration><![CDATA[(*
+    F_BPWithID : copy a beam-parameter set into an arbiter-internal set and
+    stamp it with the arbiter request ID.
+
+    Purpose:
+        Turn a caller's ST_BeamParams request into the ST_BP_ArbInternal image
+        that FB_Arbiter stores in its assertion pool: the beam parameters are
+        copied (SIZEOF(BP)) into the ST_BeamParams part at the start of the
+        result, and the request identifier is written into
+        ST_BP_ArbInternal.nId, so a stored assertion can be traced back to the
+        device and state that requested it.
+
+    Usage:
+        Assign the result wherever an ST_BP_ArbInternal is needed, i.e. when
+        packing a beam-parameter request together with the ID it was
+        registered under. BP must reference an ST_BeamParams owned by the
+        caller - the referenced set is only read, never modified - and must
+        be a valid reference, because the POU does not check it. ID must be
+        the identifier the caller registers the request under, since that
+        becomes the assertion-pool key. This helper does NOT set the remaining
+        arbiter-internal bookkeeping fields: LiveInTable and sDevName are left
+        as the function result already holds them, so a caller that puts the
+        result into the pool must set both itself (as FB_Arbiter.AddRequest
+        does with BP_Int.LiveInTable := TRUE and BP_Int.sDevName := sDevName).
+
+    Objectives:
+        - One place that performs the 'pack the ID into the beam-parameter
+          set' step, instead of each consumer open-coding the MEMCPY plus the
+          nId assignment.
+        - Keep the copied beam parameters byte-identical to the source set, so
+          the arbiter evaluates exactly the values that were requested.
+        - State the identifier contract: ID is the caller-owned request /app/namespaces/d6f73763-31bc-4bea-8f49-b5906058e129/
+          assertion ID (unique per device + state combination), not an arbiter,
+          EPICS or enum ID. 0 and PMPS_GVL.EXCLUDED_ASSERTION_ID are reserved
+          'not found' values (see F_ValidReqID); this helper does not validate
+          them, so the caller must.
+
+    History:
+        2020-08-07  Alex Wallace : Created - first attempt at packing the ID
+                                   into the arbiter pool so we can figure out
+                                   where requests come from.
+        2026-11-27  Audit fix    : Header and declaration comments added; no
+                                   code change (audit finding #254).
+*)
+FUNCTION F_BPWithID : ST_BP_ArbInternal
 VAR_INPUT
+    // Beam-parameter set to copy. Must reference a valid ST_BeamParams owned
+    // by the caller; it is read only. Units: as declared in ST_BeamParams
+    // (nTran % pre-optic, nRate Hz, neVRange/nBCRange bitmasks, apertures mm).
     BP : REFERENCE TO ST_BeamParams;
+    // Arbiter request (assertion) identifier stamped into the result's
+    // ST_BP_ArbInternal.nId. It is the caller's own request/state ID, unique
+    // per device + state combination, and FB_Arbiter uses it as the
+    // assertion-pool key. Reserved / invalid values: 0 and
+    // PMPS_GVL.EXCLUDED_ASSERTION_ID (16#FFFFFFFF) - not validated here, see
+    // F_ValidReqID. Units: none (identifier).
     ID : DWORD;
 END_VAR
 VAR
+    // Declared but unused: the implementation copies straight into the
+    // function result F_BPWithID, so nothing is ever staged through this
+    // local. Retained as declared scratch space - no behaviour depends on it.
     BpInt : ST_BP_ArbInternal;
 END_VAR
 ]]></Declaration>
