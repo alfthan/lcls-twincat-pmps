@@ -2,21 +2,85 @@
 <TcPlcObject Version="1.1.0.1">
   <POU Name="F_AttenuatorOK" Id="{860b1a67-b309-4c7c-986b-4453f9f031c8}" SpecialFunc="None">
     <Declaration><![CDATA[(*
-Indicates if the attenuator can be considered safe for a device,
-given its status word.
+F_AttenuatorOK : is the attenuator safe for a device, given its status word?
 
-In local mode, the atteunator ignores PMPS requests, following a local
-setpoint. In this mode, a device cannot trust that the attenuator will not
-increase transmission beyond its own setpoint. Therefore any
-indication of a changing transmission should cause a fault.
+Purpose:
+    Decide whether a device under PMPS protection may treat the attenuator as
+    safe while it is in the reported state. This reduces the raw attenuator
+    status word to the single question the device needs answered, and it fails
+    closed: any state it cannot prove safe for the device is reported as FALSE.
 
-In PMPS mode, if a device has submitted a preemptive request and received
-acknowledgement, then the transmission setpoint will be governed at least
-by that device's setpoint. Therefore, the attenuator may be moving without
-generating a fault.
+Usage:
+    Evaluate every scan in which the device's beam parameter request is
+    asserted, passing the attenuator status word in xStatus (per-bit contract
+    at that declaration, matching ST_AttenuatorStatus):
+
+        xAttenuatorOK := F_AttenuatorOK( xStatus := wAttenuatorStatus );
+
+    The result is advisory to the caller's beam parameter logic: this helper
+    holds no state, uses no timers and raises no fault of its own - the caller
+    decides what to do when the attenuator cannot be trusted.
+
+    In local mode, the attenuator ignores PMPS requests, following a local
+    setpoint. In this mode, a device cannot trust that the attenuator will not
+    increase transmission beyond its own setpoint. Therefore any indication of
+    a changing transmission should cause a fault.
+
+    In PMPS mode, if a device has submitted a preemptive request and received
+    acknowledgement, then the transmission setpoint will be governed at least
+    by that device's setpoint. Therefore, the attenuator may be moving without
+    generating a fault.
+
+Objectives:
+    - One place that encodes the "can the attenuator be trusted right now"
+      decision, instead of each device open-coding the status word bits.
+    - Fail closed: an uninterpretable status word, and any status word whose
+      OK bit is clear, return FALSE.
+    - Spell out the status word contract here so a caller can tell which bit
+      a given state is reported on, and so a change to the layout has one
+      documented consumer to update.
+
+Decision table (bit numbers are status word bit indices):
+    LocalMode (bit 2) set      : TRUE only when AtTarget (bit 0) is set and
+                                 Moving (bit 1) is clear and OK (bit 4) is
+                                 set. Under a local setpoint the device
+                                 cannot bound transmission, so a local
+                                 attenuator that is not at target is not
+                                 trusted, and motion under a local setpoint
+                                 always faults.
+    else PMPSMode (bit 3) set  : TRUE, provided OK (bit 4) is set. Motion is
+                                 expected, because transmission is bounded by
+                                 the acknowledged device setpoint.
+    neither mode bit set       : FALSE - the status word is not
+                                 interpretable, so it is not trusted.
+    both mode bits set         : treated as local mode; the LocalMode branch
+                                 is tested first and wins.
+
+History:
+    2020-11-05  Alex Wallace : Created - a BP compare for transmission.
+    2026-11-27  Scirix Agent : Header given purpose, usage, objectives and the
+                               status word decision table, plus the history
+                               and the xStatus bit layout comment. Comments
+                               only - no code change (audit finding #268).
 *)
 FUNCTION F_AttenuatorOK : BOOL
 VAR_INPUT
+    // Attenuator status word: one bit per status flag, no units. The bit
+    // order is that of ST_AttenuatorStatus (DUTs/InternalDUT):
+    //   bit 0 AtTarget  : TRUE when the attenuator has reached its commanded
+    //                     target transmission.
+    //   bit 1 Moving    : TRUE while the blades are moving, i.e. while the
+    //                     transmission is changing.
+    //   bit 2 LocalMode : TRUE when the attenuator ignores PMPS requests and
+    //                     follows its own local setpoint.
+    //   bit 3 PMPSMode  : TRUE when the attenuator takes its setpoints from
+    //                     PMPS only.
+    //   bit 4 OK        : TRUE when the attenuator reports itself healthy.
+    //                     When this bit is clear the function always returns
+    //                     FALSE.
+    //   bit 5 Toggle    : Heartbeat/toggle bit - not consulted here.
+    //   bit 6 Include   : Device-inclusion flag - not consulted here.
+    // Bits 7-15 are not consulted.
     xStatus : WORD;
 END_VAR
 VAR
