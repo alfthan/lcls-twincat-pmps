@@ -1,10 +1,66 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <POU Name="F_SetGoodAttStatus" Id="{e6cd67bb-2bd9-4b3d-9199-950e5913b39f}" SpecialFunc="None">
-    <Declaration><![CDATA[//Use for testing purposes to set the attenuator status to a good state
+    <Declaration><![CDATA[(*
+    F_SetGoodAttStatus - forces the bits of an attenuator status word into the
+    "good" state used by tests.
+
+    PURPOSE
+        Test helper for PMPS test fixtures. Starting from the attenuator status
+        word supplied in xStatus, it sets the bits that describe a healthy,
+        PMPS-governed attenuator, so code that judges attenuator health (for
+        example F_AttenuatorOK) sees the attenuator as safe and stable.
+
+        The bit layout is the one declared in ST_AttenuatorStatus:
+            bit 0  AtTarget : attenuator has reached its requested transmission
+            bit 1  Moving   : attenuator is travelling to a new transmission
+            bit 2  LocalMode: attenuator ignores PMPS requests, follows a local
+                              setpoint
+            bit 3  PMPSMode : attenuator takes setpoints only from PMPS
+            bit 4  OK       : no attenuator error, status is stable
+            bit 5  Toggle   : unused
+            bit 6  Include  : consider this device's status
+
+        This helper sets bit 0 (AtTarget), bit 3 (PMPSMode) and bit 4 (OK) and
+        leaves every other bit of the supplied word unchanged. Starting from a
+        zeroed word the result therefore reads "at target, in PMPS mode, no
+        errors", for which F_AttenuatorOK returns TRUE.
+
+    USAGE
+        For test code only, never for production logic. Use it wherever a test
+        must present PMPS with a healthy attenuator, instead of hand-writing the
+        status bits at each call site. There are no call sites for this helper
+        in this library today; it is exported for test fixtures in dependent
+        libraries.
+
+    OBJECTIVES
+        - Spell out the attenuator status bits next to the helper that
+          synthesises a good value for them, so the pattern can be reviewed
+          without cross-referencing ST_AttenuatorStatus.
+        - Keep the definition of a "good" attenuator status word in one place,
+          so a change of bit layout is made in a single function.
+        - Record the current behaviour of the helper so a maintainer can reuse
+          it safely (see NOTE).
+
+    NOTE
+        Behaviour documented here, deliberately not changed by this comment
+        pass: xStatus is a by-value VAR_INPUT and the function result is never
+        assigned, so the three bit writes only modify the local copy of the word
+        and a caller currently receives 0 (the UINT default). Making the helper
+        useful to a caller needs either xStatus declared as VAR_IN_OUT or an
+        F_SetGoodAttStatus := xStatus assignment.
+
+    HISTORY
+        2020-11-18 / Alex Wallace
+            Function created with the "Tests for the margin logic" change.
+        2026-11-27 / Scirix Agent
+            Added this header comment and the inline xStatus comment, including
+            the attenuator status bit layout; documentation only, no behaviour
+            change (audit finding #261, convention conv_321640e095c0).
+*)
 FUNCTION F_SetGoodAttStatus : UINT
 VAR_INPUT
-    xStatus : UINT;
+    xStatus : UINT; // Attenuator status word (ST_AttenuatorStatus layout): bits 0 AtTarget, 3 PMPSMode and 4 OK are set by this function, all other bits pass through unchanged
 END_VAR
 VAR
 END_VAR
