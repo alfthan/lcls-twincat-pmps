@@ -1,16 +1,73 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <DUT Name="ST_BP_ArbInternal" Id="{cafc2631-22b5-4976-a8a9-7355cd6daf26}">
-    <Declaration><![CDATA[TYPE ST_BP_ArbInternal EXTENDS ST_BeamParams :
+    <Declaration><![CDATA[(* ST_BP_ArbInternal - one row of an arbiter's beam parameter assertion pool.
+A. Wallace 2020-08-07
+
+Purpose:
+    Pair a beam parameter set (the inherited ST_BeamParams members) with the
+    identity of the request that submitted it, so the arbiter's assertion pool
+    can report who is asserting what. FB_Arbiter.AddRequest stores one of these
+    values per request in FB_BeamParamAssertionPool, keyed by the request ID.
+    The three members declared below are that bookkeeping; they are not beam
+    parameters.
+
+Usage:
+    Internal to the PMPS library - device, IOC and application code uses
+    ST_BeamParams, not this type. AddRequest is the only writer: it MEMCPYs the
+    caller's ST_BeamParams over a local instance of this type (sound because
+    this type EXTENDS ST_BeamParams), then sets nId, LiveInTable and sDevName.
+    The pytmc pragmas below export those three members to EPICS as read-only
+    diagnostics of the pool; ST_BeamParams' own pragmas export the parameters.
+
+Objectives:
+    - One pool lookup returns both the beam parameters to arbitrate and the
+      identity needed to attribute them.
+    - The exported assertion-pool table shows, per row, which request holds the
+      row (nId), whether the row is still claimed (LiveInTable) and by which
+      device (sDevName), with no second table to keep in step.
+    - Identify rows only. The arbitration math (FB_Arbiter.ArbitrateBP) reads
+      and writes the inherited ST_BeamParams members and never looks at these.
+
+Caution: AddRequest and FB_BeamParamAssertionPool.DataPoolToEpics copy whole
+structs with MEMCPY, and the exported EPICS Entry array follows this layout. Do
+not reorder, resize or insert members here or in ST_BeamParams without
+regenerating PMPS.tmc and the pytmc-generated IOC records.
+
+History:
+    2020-08-07 A. Wallace - type created with nId and LiveInTable to pack the
+        request ID into the pool (7ac36a2, "An attempt at packing the ID into
+        the arbiter pool so we can figure out where requests come from").
+    2020-08-20 A. Wallace - pytmc pragmas added for the arbiter diagnostics
+        (acfeeba, "PVs for better arbiter diags.").
+    2021-05-05 ghalym - sDevName added with its pytmc pragma (4d6c033, "DEV:
+        Adding sDev name to address issue#82").
+    2026-11-27 - header and per-member comments added; no member, type or
+        layout change (POU header comment audit, task #294).
+*)
+TYPE ST_BP_ArbInternal EXTENDS ST_BeamParams :
 STRUCT
+    // Arbitration request ID: the nReqID the device passed to AddRequest
+    // (unique per device + state combination), which is also this row's hash
+    // table key. Unitless 32-bit identifier, not an array index. 0 is never a
+    // live request (AddRequest rejects it) and is what RemoveRequest writes
+    // into a row that is being retired.
     {attribute 'pytmc' := 'pv: ID
         io: i
     '}
     nId : DWORD;
+    // TRUE while this row holds a live, asserted request; set by AddRequest
+    // and never cleared by arbitration itself. FALSE marks a retired row:
+    // RemoveRequest overwrites the row with a zeroed filler before deleting it
+    // so the exported table never shows stale data. Diagnostics only.
     {attribute 'pytmc' := 'pv: Live
         io: i
     '}
     LiveInTable : BOOL;
+    // Report label naming the requester: the sDevName given to AddRequest, or
+    // "Arbiter ID: 0x...." when a lower authority arbiter elevates its own
+    // request. Free text for the EPICS table, not a PLC path or PV name; held
+    // as STRING(80), so a longer caller-supplied name is truncated.
     {attribute 'pytmc' := 'pv: Device
         io: i
     '}
