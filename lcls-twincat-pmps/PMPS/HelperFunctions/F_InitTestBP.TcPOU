@@ -1,11 +1,69 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <POU Name="F_InitTestBP" Id="{872b1e54-dad7-464f-b50c-ec80c2c884b3}" SpecialFunc="None">
-    <Declaration><![CDATA[// Establishes a BP set for testing.
-// Specifically this means a BP that has all the status bits set to an OK state
+    <Declaration><![CDATA[(*
+    F_InitTestBP - build a beam-parameter set whose fields are in the "OK"
+    state, for use as test data in the PMPS test suites.
+
+    PURPOSE
+        Give a test one place to obtain an ST_BeamParams that describes "the
+        beam is fine" - every status-bearing field at its non-faulting value -
+        instead of each test spelling out all the members itself. Tests then
+        override only the one or two members the assertion under test depends
+        on, which keeps them readable and keeps a change to ST_BeamParams from
+        having to be replayed in every test.
+
+    USAGE
+        Call it where a test needs a starting BP set and assign the result:
+            stBp : ST_BeamParams;
+            stBp := F_InitTestBP(stBp);
+        The function is stateless and reads no global state, so it may be
+        called from any TcUnit test method without side effects.
+        NOTE: there are no callers today. The POU is part of the PMPS.plcproj
+        compile list but nothing in the library references it; the
+        beam-parameter tests in TestComponents/FB_SafeBPCompare_Test build
+        their data with F_SetBeamParams instead, and that is the helper still
+        in use.
+
+    OBJECTIVES
+        - One definition of "OK" test data, so tests cannot drift apart on what
+          a healthy BP set looks like.
+        - Test code that shows only what the test is about.
+        - Absorb future additions to ST_BeamParams in a single place.
+
+    HISTORY
+        2020-11-18 / Alex Wallace
+            Function added in "Tests for the margin logic" (commit 16e0988)
+            together with the first TcUnit beam-parameter tests. It was created
+            with an empty body and has never been called.
+        2026-09-16 / Yann Stephen Mandza
+            The XAE ProductVersion attribute was dropped from the TcPlcObject
+            element (commit f77073f). No code change.
+        2026-11-27 / Scirix Agent
+            Added this header and the inline comment on BP; declaration and body
+            unchanged (audit finding #256, convention conv_321640e095c0).
+
+    NOTE
+        The implementation is empty, so the function does not currently do what
+        the purpose above describes: it never reads BP and never assigns its
+        return value, so a caller gets the ST_BeamParams field defaults declared
+        in the DUT - nTran 0, nRate 0, neVRange 0, neV 0, nBCRange 0,
+        nBeamClass 0, nMachineMode 3, astAttenuators all 0, astApertures
+        1000 mm x 1000 mm (fully open), aVetoDevices all FALSE, xValid FALSE,
+        nCohortInt 0 - i.e. a beam-off set, not an "all status bits OK" one.
+        Do not treat the result as a ready-to-use BP until the body is filled
+        in.
+*)
 FUNCTION F_InitTestBP : ST_BeamParams
 VAR_INPUT
-    BP : ST_BeamParams;
+    BP : ST_BeamParams; // BP set handed in by the caller, a complete ST_BeamParams:
+                        // nTran = requested pre-optic transmission, 0..1 of full
+                        //   transmission (1.0 = 100 %, per HOPR 1 / LOPR 0 and
+                        //   PMPS_GVL.TRANS_SCALING_FACTOR); nRate = pulse rate in Hz;
+                        // neVRange = photon-energy range bit mask; nBCRange = beam-class
+                        //   range bit mask; astAttenuators = per-attenuator transmission
+                        //   in %; astApertures = Width/Height in mm. Not read by the
+                        //   empty body - see NOTE in the header above.
 END_VAR
 VAR
 END_VAR
