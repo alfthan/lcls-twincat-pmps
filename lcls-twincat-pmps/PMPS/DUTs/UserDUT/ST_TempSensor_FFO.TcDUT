@@ -1,0 +1,38 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <DUT Name="ST_TempSensor_FFO" Id="{5f9e8aae-5859-4a0d-ae32-facb4372ef9e}">
+    <Declaration><![CDATA[TYPE ST_TempSensor_FFO :
+STRUCT
+    (*
+        Complete command and status interface of a temperature sensor that trips the
+        hardware fast fault output (FB_TempSensor_FFO). One struct is owned by the
+        caller and handed to FB_TempSensor_FFO as its single VAR_IN_OUT.
+    *)
+
+    (* Trip point configuration *)
+    {attribute 'pytmc' := '
+        pv: FAULT_SP
+        io: input
+        field: EGU C
+        field: PREC 2
+    '}
+    fFaultThreshold : LREAL; // Temperature (C) at which the fast fault trips
+
+    {attribute 'pytmc' := '
+        pv: FAULT_SP_HYS
+        io: input
+        field: EGU %
+        field: PREC 2
+    '}
+    fHysteresis : LREAL := 1; // Release band in percent below the trip point; clamped to 1..100
+
+    (* Fast fault configuration *)
+    sDevName : STRING; // Device name reported in the fast fault message
+    bVeto : BOOL := FALSE; // TRUE: the fault is reported but must not trip the beam
+    bAutoReset : BOOL := TRUE; // TRUE: the fault clears by itself once the temperature is back in band
+
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <DUT Name="ST_SolidAttenuator" Id="{fddb6b5c-fde3-4b9e-9b2a-36ddf8feb5a9}">
+    <Declaration><![CDATA[TYPE ST_SolidAttenuator :
+STRUCT
+    (*
+        Complete command and status interface of a binary solid attenuator
+        (FB_SolidAttenuator). One struct is owned by the caller and handed to the
+        function block as its VAR_IN_OUT; the blade state itself stays internal to
+        the function block.
+    *)
+
+    (* Commands *)
+    rRequestedAttenuation : REAL; // Requested total attenuation in percent (0..100)
+
+    (* Status *)
+    xFault : BOOL; // Latched fault status; TRUE while the attenuator cannot reach the request
+    rCurrentAttenuation : REAL; // Attenuation in percent reached with the current blade selection
+
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

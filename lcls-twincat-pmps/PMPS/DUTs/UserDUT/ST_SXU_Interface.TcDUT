@@ -1,0 +1,56 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <DUT Name="ST_SXU_Interface" Id="{fa01c8d2-0319-4f0c-9db7-b76e79c15615}">
+    <Declaration><![CDATA[TYPE ST_SXU_Interface :
+STRUCT
+    (*
+        Complete command and status interface of the SXU undulator complex (FB_SXU).
+        One struct is owned by the caller and handed to FB_SXU as its single
+        VAR_IN_OUT, so the whole device interface can be passed atomically and
+        extended without changing the function block signature.
+    *)
+
+    (* Commands and inputs *)
+    // Electron beam energy source (GeV) used by every undulator segment of the complex.
+    // The caller binds this pointer with ADR(<its FB_LREALFromEPICS instance>) before the
+    // call; FB_SXU rejects a null pointer and reports zero photon energy instead.
+    pfbElectronEnergy : POINTER TO FB_LREALFromEPICS;
+
+    (* Status *)
+    {attribute 'pytmc' := '
+        pv: CurrentPhotonEnergy
+        io: i
+        field: DESC Calculated current photon energy
+        field: PREC 3
+        field: EGU eV
+    '}
+    fCurrentPhotonEnergy : LREAL; // Photon energy (eV) of the first active (seed) undulator
+
+    {attribute 'pytmc' := '
+        pv: TargetPhotonEnergy
+        io: i
+        field: DESC Calculated desired photon energy
+        field: PREC 3
+        field: EGU eV
+    '}
+    fTargetPhotonEnergy : LREAL; // Photon energy (eV) the first active undulator would reach at its target K
+
+    {attribute 'pytmc' := '
+        pv: SeedUndulatorNumber
+        io: i
+        field: DESC Seed undulator number
+    '}
+    nSeedUndulator : UDINT; // Number of the active seed undulator; zero when no undulator is active
+
+    {attribute 'pytmc' := '
+        pv: TargetSeedUndulatorNumber
+        io: i
+        field: DESC Seed undulator number for target K
+    '}
+    nTargetSeedUndulator : UDINT; // Number of the seed undulator for the target K; zero when no undulator is active
+
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

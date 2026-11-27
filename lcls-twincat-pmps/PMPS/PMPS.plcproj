@@ -93,6 +93,9 @@
     <Compile Include="DUTs\InternalDUT\ST_PMPS_Attenuator.TcDUT">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="DUTs\InternalDUT\ST_SolidAttenuator.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="DUTs\InternalDUT\T_HashTableEntry.TcDUT">
       <SubType>Code</SubType>
     </Compile>
@@ -133,6 +136,14 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="DUTs\UserDUT\ST_Device.TcDUT">
+      <SubType>Code</SubType>
+      <LinkAlways>true</LinkAlways>
+    </Compile>
+    <Compile Include="DUTs\UserDUT\ST_SXU_Interface.TcDUT">
+      <SubType>Code</SubType>
+      <LinkAlways>true</LinkAlways>
+    </Compile>
+    <Compile Include="DUTs\UserDUT\ST_TempSensor_FFO.TcDUT">
       <SubType>Code</SubType>
       <LinkAlways>true</LinkAlways>
     </Compile>
