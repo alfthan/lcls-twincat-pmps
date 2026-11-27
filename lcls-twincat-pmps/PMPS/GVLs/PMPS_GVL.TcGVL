@@ -53,6 +53,7 @@ VAR_GLOBAL CONSTANT
     TRANS_SCALING_FACTOR : REAL := REAL#1.0; // Scaling factor for fixed-point transmission
 
     AUX_ATTENUATORS : UINT := 16; // Maximum # of attenuators in the PMPS
+    MAX_ATTENUATOR_BLADES : INT := 10; // Maximum # of blade slots in a binary solid attenuator (ST_BinarySolidAttenuator.axBlades); bounds FB_SolidAttenuator.axNewBladeStates and its search loop
     MAX_VETO_DEVICES   :   UINT := 16;
     stAttenuators : ST_PMPS_Attenuator :=(nTran:=1,xAttOK:=1);
     {attribute 'pytmc' := '

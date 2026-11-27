@@ -1,9 +1,21 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <POU Name="FB_SolidAttenuator" Id="{cd5d4e65-a9f8-4b0e-8a86-0aae33fd9f06}" SpecialFunc="None">
-    <Declaration><![CDATA[FUNCTION_BLOCK FB_SolidAttenuator
+    <Declaration><![CDATA[(* Picks the set of solid-attenuator blades needed to reach a requested attenuation.
+
+Walks the blade stack thickest to thinnest (stAttenuator.axBlades), accumulating blade
+thickness while it still fits inside the requested attenuation, and records the
+resulting per-blade state in axNewBladeStates.
+
+The number of blade slots is declared once, as PMPS_GVL.MAX_ATTENUATOR_BLADES, and is
+reused for the axNewBladeStates array bound and for the nArrayLength loop bound, so the
+two bounds cannot diverge when the blade count changes.
+
+2026-11-27: blade slot count extracted from the hard-coded array upper bound into
+PMPS_GVL.MAX_ATTENUATOR_BLADES (audit finding #1152). *)
+FUNCTION_BLOCK FB_SolidAttenuator
 VAR_INPUT
-    i_rRequestedAttenuation    :    REAL;
+    i_rRequestedAttenuation    :    REAL; // Attenuation requested for this cycle
 END_VAR
 VAR_OUTPUT
     q_xFault    :    BOOL;
@@ -15,8 +27,10 @@ END_VAR
 VAR
     stAttenuator    :    ST_BinarySolidAttenuator;
     nSearchStart: INT;
-    nArrayLength: INT;
-    axNewBladeStates    :    ARRAY [0..9]    OF    BOOL;
+    // Number of blade slots searched, taken from the shared blade cap so it matches the array bound below
+    nArrayLength: INT := PMPS_GVL.MAX_ATTENUATOR_BLADES;
+    // Target state of each blade slot, sized by the same shared blade cap
+    axNewBladeStates    :    ARRAY [0..PMPS_GVL.MAX_ATTENUATOR_BLADES - 1]    OF    BOOL;
     nTryIndex: INT;
     rCurrentAccumulatedAttenuation: REAL;
     rTryFilter: REAL;
