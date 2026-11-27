@@ -10,10 +10,15 @@
 
     Call this in your init cycle to set up your eV bitmasks for more readable code
     that is also more resiliant to eV range definition adjustments.
+
+    History:
+        2021-04-26 Z. Lentz    : Created the eV bitmask calculation helpers.
+        2026-11-27 L. Numminen : Added the header history and documented the units and
+                                 semantics of fLower and fUpper.
 *)
 VAR_INPUT
-    fLower: REAL;
-    fUpper: REAL;
+    fLower: REAL; // Lower limit of the safe eV band [eV]; a boundary band is marked safe only if its lower edge is at or above this value
+    fUpper: REAL; // Upper limit of the safe eV band [eV]; must be >= fLower (reversed endpoints mark no band safe and return an all-zero mask)
 END_VAR
 VAR
     nBitmask: DWORD := 0;
