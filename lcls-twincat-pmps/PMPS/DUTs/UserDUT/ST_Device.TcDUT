@@ -3,6 +3,24 @@
   <DUT Name="ST_Device" Id="{bc9ee667-91fb-46f2-af26-3ee8851b76e5}">
     <Declaration><![CDATA[TYPE ST_Device :
 STRUCT
+(* ST_Device
+
+   Purpose : Interface struct for one PMPS-governed linear actuator. The owning
+             PLC program supplies the I/O links, the actuator travel limits and
+             the device state table; FB_LinearGovernor runs the protection and
+             run logic from this data.
+
+   Safety  : xEnable is the only motion-enable request that reaches MC_Power in
+             FB_LinearGovernor and it defaults FALSE. A freshly declared or reset
+             device is therefore de-energized and cannot move on the first scan.
+             The caller must explicitly command xEnable := TRUE before motion is
+             possible; dropping it de-energizes the axis again.
+
+   History : 2026-11-27 - xEnable defaulted to FALSE instead of TRUE so that
+             enabling is always an explicit, deliberate caller command (audit
+             finding #271, convention conv_65aba2c165c0).
+             Alex Wallace, 2020.
+*)
     //IO
     stAxis	:	AXIS_REF;
     //The following limit switches must be TRUE or high (ie. NC) to enable that direction of motion
@@ -14,7 +32,9 @@ STRUCT
     lrUpperPositionLimit	:	LREAL := 10000000000; //Use in conjuntion with limit switches or set to a huge number to ignore
     lrLowerPositionLimit	:	LREAL := -10000000000; //Use in conjuntion with limit switches or set to a huge number to ignore
 
-    xEnable	:	BOOL := TRUE;
+    //Enable request. Safety default FALSE: the device is not powered and no
+    //motion is possible until the caller explicitly commands xEnable := TRUE.
+    xEnable	:	BOOL := FALSE;
 
     //Supervisory System
 

@@ -9,6 +9,15 @@ Does your state match the device position and visa versa?
 Are the beam parameters safe for the device state?
 Did you properly assert the transition and final beam parameters?
 
+Safety: the only power-enable path is the MC_Power call at the bottom of this
+block, whose Enable comes from stDevice.xEnable. That flag is the explicit
+motion-enable request and ST_Device defaults it to FALSE, so a device nobody
+has explicitly enabled stays de-energized, including on the first scan after
+download or reset. Dropping xEnable de-energizes the axis again.
+
+History: 2026-11-27 - Documented the explicit-enable contract after the
+ST_Device.xEnable default was corrected to FALSE (audit finding #271,
+convention conv_65aba2c165c0).
 *)
 FUNCTION_BLOCK FB_LinearGovernor
 VAR_INPUT
@@ -26,6 +35,9 @@ VAR_OUTPUT
     q_xMPSLimitsOverridden: BOOL;
 END_VAR
 VAR_IN_OUT
+    (* The governed device. stDevice.xEnable is the motion-enable request: it is
+       safety-relevant, ST_Device defaults it to FALSE, and the caller must
+       explicitly command it TRUE before this block powers the axis. *)
     stDevice    :    ST_Device; //The governed
     Arbiter    :    FB_Arbiter;
     FastFaultOutput    :    FB_HardwareFFOutput;
@@ -192,7 +204,7 @@ mcPower.Enable_Negative := xActuatorNegativeEnable AND (tonMPSOverrideMode.Q OR 
 
 mcPower(
     Axis := stDevice.stAxis,
-    Enable := stDevice.xEnable //link to device enable <TODO>
+    Enable := stDevice.xEnable //Explicit enable request; FALSE until the caller commands TRUE
 );
 
 
