@@ -1,7 +1,18 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.0">
   <POU Name="FB_BeamParamFanout_Test" Id="{dd1576e3-6a47-480f-9d83-ec18ad48a9df}" SpecialFunc="None">
     <Declaration><![CDATA[{attribute 'call_after_init'}
+(*
+Test suite for the beam parameter fanout.
+
+Every scenario drives the fanout one simulated PLC cycle at a time: fbBPF() is
+called once per cycle, and the cycle is repeated after each input change for as
+many cycles as the scenario needs before anything is asserted. The validity flag
+is therefore never read from an output that was produced before the input change.
+
+History:
+2026-11-27 task #197 - cycle stepped scenarios, single- and multi-cycle cases
+*)
 FUNCTION_BLOCK FB_BeamParamFanout_Test EXTENDS TcUnit.FB_TestSuite
 VAR_INPUT
 END_VAR
@@ -10,30 +21,125 @@ END_VAR
 VAR
 
 END_VAR
-]]></Declaration>
+VAR CONSTANT
+    N_CYCLES    :    UINT := 5; //Simulated PLC cycles a stepping loop advances before an assertion
+    XTXPDO_STATE_OP    :    BIT := 0; //EtherCAT PDO state "operational"
+    XTXPDO_STATE_NOT_OP    :    BIT := 1; //EtherCAT PDO state "not operational"
+END_VAR]]></Declaration>
     <Implementation>
-      <ST><![CDATA[]]></ST>
+      <ST><![CDATA[BPFanoutValidWhileOp();
+BPFanoutInvalidAfterNonOpCycle();
+BPFanoutStaysInvalidAcrossCycles();]]></ST>
     </Implementation>
-    <Method Name="BPFanoutSafeguard" Id="{67cbccc4-d34a-47bc-9756-48abe5d35bab}">
-      <Declaration><![CDATA[METHOD PRIVATE BPFanoutSafeguard
+    <Method Name="BPFanoutValidWhileOp" Id="{880cb7fc-45e5-43db-ba60-4b2ca1c2d831}">
+      <Declaration><![CDATA[(*
+The interface is operational for several cycles: the validity flag must be
+present after the fanout has run every one of those cycles.
+*)
+METHOD PRIVATE BPFanoutValidWhileOp
 VAR_INPUT
 END_VAR
-VAR
-    fbBPF    :    FB_BeamParamFanout;
+VAR_INST
+    fbBPF    :    FB_BeamParamFanout; //Fanout under test
+    nCycle    :    UINT; //Cycle counter of the stepping loops
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[TEST('Reset validity bool if interface invalid');
-fbBPF.xTxPDO_state := 0; //OP
-fbBPF();
+        <ST><![CDATA[TEST('BPFanoutValidWhileOp');
+
+fbBPF.xTxPDO_state := XTXPDO_STATE_OP; //OP
+FOR nCycle := 1 TO N_CYCLES DO
+    fbBPF();
+END_FOR
+
 AssertTrue(fbBPF.stBP.xValidToggle,
     'Does not start valid');
 
-fbBPF.xTxPDO_state := 1; // Not op
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="BPFanoutInvalidAfterNonOpCycle" Id="{a7813232-e611-46a0-8f2a-f320d2b9b162}">
+      <Declaration><![CDATA[(*
+Single cycle transition: the interface drops out of operational. The validity
+flag has to be reset on the first cycle that runs with the new state, which is
+the only cycle the assertion may follow.
+*)
+METHOD PRIVATE BPFanoutInvalidAfterNonOpCycle
+VAR_INPUT
+END_VAR
+VAR_INST
+    fbBPF    :    FB_BeamParamFanout; //Fanout under test
+    nCycle    :    UINT; //Cycle counter of the stepping loops
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('BPFanoutInvalidAfterNonOpCycle');
+
+fbBPF.xTxPDO_state := XTXPDO_STATE_OP; //OP
+FOR nCycle := 1 TO N_CYCLES DO
+    fbBPF();
+END_FOR
+
+AssertTrue(fbBPF.stBP.xValidToggle,
+    'Does not start valid');
+
+//Interface leaves operational
+fbBPF.xTxPDO_state := XTXPDO_STATE_NOT_OP; //Not op
+
+//Single simulated cycle
+fbBPF();
 
 AssertFalse(fbBPF.stBP.xValidToggle,
     'Does not indicate invalid after IF goes non-op');
 
-]]></ST>
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="BPFanoutStaysInvalidAcrossCycles" Id="{65326b8f-8cf2-4afe-97c8-929df110b140}">
+      <Declaration><![CDATA[(*
+Multi cycle transition: the validity flag has to stay reset for as long as the
+interface stays out of operational, and it has to come back only after the
+fanout has run again with the interface operational.
+*)
+METHOD PRIVATE BPFanoutStaysInvalidAcrossCycles
+VAR_INPUT
+END_VAR
+VAR_INST
+    fbBPF    :    FB_BeamParamFanout; //Fanout under test
+    nCycle    :    UINT; //Cycle counter of the stepping loops
+    bHeldInvalid    :    BOOL; //TRUE while the validity flag was reset on every stepped cycle
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('BPFanoutStaysInvalidAcrossCycles');
+
+fbBPF.xTxPDO_state := XTXPDO_STATE_OP; //OP
+FOR nCycle := 1 TO N_CYCLES DO
+    fbBPF();
+END_FOR
+
+AssertTrue(fbBPF.stBP.xValidToggle,
+    'Does not start valid');
+
+//Interface leaves operational and stays there for several cycles
+fbBPF.xTxPDO_state := XTXPDO_STATE_NOT_OP; //Not op
+
+bHeldInvalid := TRUE;
+FOR nCycle := 1 TO N_CYCLES DO
+    fbBPF();
+    bHeldInvalid := bHeldInvalid AND NOT fbBPF.stBP.xValidToggle;
+END_FOR
+
+AssertTrue(bHeldInvalid,
+    'Validity flag was not held reset while the interface stayed non-op');
+
+//Interface returns to operational: valid again after the required cycles
+fbBPF.xTxPDO_state := XTXPDO_STATE_OP; //OP
+FOR nCycle := 1 TO N_CYCLES DO
+    fbBPF();
+END_FOR
+
+AssertTrue(fbBPF.stBP.xValidToggle,
+    'Validity flag was not restored after the interface returned to OP');
+
+TEST_FINISHED();]]></ST>
       </Implementation>
     </Method>
   </POU>

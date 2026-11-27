@@ -1,7 +1,25 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <POU Name="FB_PhotonEnergyWatcher_Test" Id="{e76e3f02-a717-47db-b27b-f0213e4a9384}" SpecialFunc="None">
     <Declaration><![CDATA[{attribute 'call_after_init'}
+(*
+Test suite for FB_PhotonEnergyWatcher.
+
+Each scenario drives the watcher and the FB_HardwareFFOutput (FFO) it reports to
+one simulated PLC cycle at a time, in the order MAIN uses them: the watcher runs
+first, then the FFO evaluates its hardware output. Assertions are only made after
+a stepping loop has advanced the number of cycles the scenario requires, so a
+regression in the cycle to cycle behaviour of the watcher cannot be hidden by a
+stale output read.
+
+The watcher latches its fast fault; in operation it is acknowledged through the
+fault table entry of the FFO (the EPICS Reset bit of that fast fault), so the
+scenarios drive the same path when they clear a fault.
+
+History:
+2019-04-22 A. Wallace - original PEWatcherBasicFunction scenarios
+2026-11-27 task #197 - cycle stepped scenarios, single- and multi-cycle cases
+*)
 FUNCTION_BLOCK FB_PhotonEnergyWatcher_Test EXTENDS TcUnit.FB_TestSuite
 VAR_INPUT
 END_VAR
@@ -10,129 +28,255 @@ END_VAR
 VAR
 
 END_VAR
-]]></Declaration>
+VAR CONSTANT
+    N_CYCLES    :    UINT := 5; //Simulated PLC cycles a stepping loop advances before an assertion
+    PEW_FAST_FAULT_INDEX    :    UINT := 1; //Entry of the watcher's fast fault in the FFO fault table
+    RANGE_IN_BOUNDS    :    DWORD := 2#0000_0000_0000_0010; //eV range bit inside the requested range
+    RANGE_OUT_OF_BOUNDS    :    DWORD := 2#0000_0000_1000_0000; //eV range bit outside the requested range
+    RANGE_REQUESTED    :    DWORD := 2#0000_1111_0011_1111; //Requested (arbitrated) eV range bit mask
+END_VAR]]></Declaration>
     <Implementation>
-      <ST><![CDATA[PEWatcherBasicFunction();]]></ST>
+      <ST><![CDATA[PEWatcherWithinBoundsMultiCycle();
+PEWatcherTripsWithinOneCycle();
+PEWatcherFaultLatchesAcrossCycles();]]></ST>
     </Implementation>
-    <Method Name="PEWatcherBasicFunction" Id="{9882a49a-9895-425c-a199-feec81d853df}">
-      <Declaration><![CDATA[METHOD PEWatcherBasicFunction
+    <Method Name="PEWatcherWithinBoundsMultiCycle" Id="{850c8e68-7542-4889-b91c-1266103be405}">
+      <Declaration><![CDATA[(*
+Beam inside the arbitrated range over many cycles.
+
+The FFO only brings its hardware output up on a reset edge taken while every
+registered fast fault permits beam, so the setup loop sends the acknowledge and
+the clear request. The second loop releases both and proves the output stays up
+cycle after cycle without a fresh request.
+*)
+METHOD PEWatcherWithinBoundsMultiCycle
 VAR_INPUT
 END_VAR
 VAR_INST
-    fbPEW    :    FB_PhotonEnergyWatcher;
-    fbFFO    :    FB_HardwareFFOutput;
-    q_Output    :    BOOL;
-
-    stCurBeamParams    :    ST_BeamParams;
-    stMachineTargetBeamParams    :    ST_BeamParams;
-    stReqBeamParams    :    ST_BeamParams;
+    fbPEW    :    FB_PhotonEnergyWatcher; //Watcher under test
+    fbFFO    :    FB_HardwareFFOutput; //Fast fault output the watcher reports to
+    q_Output    :    BOOL; //Hardware output of the FFO, sampled every simulated cycle
+    stCurBeamParams    :    ST_BeamParams; //Current beam parameters
+    stMachineTargetBeamParams    :    ST_BeamParams; //Machine target beam parameters
+    stReqBeamParams    :    ST_BeamParams; //Requested (arbitrated) beam parameters
+    nCycle    :    UINT; //Cycle counter of the stepping loops
+    bHeldHigh    :    BOOL; //TRUE while the FFO output was true on every stepped cycle
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[TEST('PEWatcherBasicFunction');
+        <ST><![CDATA[TEST('PEWatcherWithinBoundsMultiCycle');
 
-//Clear FFO fault to start
-fbFFO(i_xReset:=TRUE);
+//Scenario setup: current and target eV inside the arbitrated request
+stCurBeamParams.neVRange := RANGE_IN_BOUNDS;
+stMachineTargetBeamParams.neVRange := RANGE_IN_BOUNDS;
+stReqBeamParams.neVRange := RANGE_REQUESTED;
 
-//All eV OK
-stCurBeamParams.neVRange := F_eVRangeCalculator(800, 0);
-
-stMachineTargetBeamParams.neVRange := 2#0000_0000_1000_0000;
-
-stReqBeamParams.neVRange := 2#1111_1111_1111_1111;
-
-fbFFO(i_xReset:=FALSE); //Reset request released
-
-fbPEW(i_stCurrentBeamParams := stCurBeamParams,
-    i_stMachineTargetBeamParams := stMachineTargetBeamParams,
-    i_stRequestedBeamParams := stReqBeamParams,
-    io_fbFFHWO := fbFFO,
-    i_xReset := TRUE); //Clear local FF within PEW
-
-fbFFO.EvaluateOutput(q_xFastFaultOut=>q_Output); //This simulates a completed PLC cycle
-//Evaluate output should be called once at the end of a PLC cycle.
+//Stepping loop: acknowledge the watcher's fast fault and request the FFO clear,
+//then hold the sequence for several cycles so the output state is settled
+//before anything is asserted. The acknowledge is the fault table Reset bit the
+//EPICS layer writes; the watcher itself latches its fast fault.
+fbFFO.astFF[PEW_FAST_FAULT_INDEX].Reset := TRUE;
+fbFFO.i_xReset := TRUE;
+FOR nCycle := 1 TO N_CYCLES DO
+    fbPEW(i_stCurrentBeamParams := stCurBeamParams,
+        i_stMachineTargetBeamParams := stMachineTargetBeamParams,
+        i_stRequestedBeamParams := stReqBeamParams,
+        io_fbFFHWO := fbFFO);
+    fbFFO.EvaluateOutput(q_xFastFaultOut => q_Output);
+END_FOR
 
 AssertTrue(q_Output,
-    'Beam within limits, FFO should be true');
+    'Beam within limits for several cycles, FFO should be true');
 
+//Stepping loop: reset requests released, the beam is still inside the limits so
+//the output must hold on every further cycle
+fbFFO.i_xReset := FALSE;
+bHeldHigh := TRUE;
+FOR nCycle := 1 TO N_CYCLES DO
+    fbPEW(i_stCurrentBeamParams := stCurBeamParams,
+        i_stMachineTargetBeamParams := stMachineTargetBeamParams,
+        i_stRequestedBeamParams := stReqBeamParams,
+        io_fbFFHWO := fbFFO);
+    fbFFO.EvaluateOutput(q_xFastFaultOut => q_Output);
+    bHeldHigh := bHeldHigh AND q_Output;
+END_FOR
 
-//Req eV moved out of range
-stCurBeamParams.neVRange := F_eVRangeCalculator(800, 0);
+AssertTrue(bHeldHigh,
+    'FFO dropped out with the beam still inside the limits');
 
-stMachineTargetBeamParams.neVRange := F_eVRangeCalculator(800, 0);
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="PEWatcherTripsWithinOneCycle" Id="{cd0bddb2-ed18-4626-9c7e-541e5c864cc0}">
+      <Declaration><![CDATA[(*
+Single cycle transition: the current photon energy leaves the arbitrated range.
 
-stReqBeamParams.neVRange := 2#0000_1111_0011_1111;
+The watcher has no deliberate delay on the fault path, so the fault has to be on
+the FFO output on the first cycle that runs with the new input. The assertion is
+made after that one cycle only.
+*)
+METHOD PEWatcherTripsWithinOneCycle
+VAR_INPUT
+END_VAR
+VAR_INST
+    fbPEW    :    FB_PhotonEnergyWatcher; //Watcher under test
+    fbFFO    :    FB_HardwareFFOutput; //Fast fault output the watcher reports to
+    q_Output    :    BOOL; //Hardware output of the FFO, sampled every simulated cycle
+    stCurBeamParams    :    ST_BeamParams; //Current beam parameters
+    stMachineTargetBeamParams    :    ST_BeamParams; //Machine target beam parameters
+    stReqBeamParams    :    ST_BeamParams; //Requested (arbitrated) beam parameters
+    nCycle    :    UINT; //Cycle counter of the stepping loops
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('PEWatcherTripsWithinOneCycle');
 
-fbPEW.i_xReset := FALSE; //release local FF reset req
-fbPEW(i_stCurrentBeamParams := stCurBeamParams,
-    i_stMachineTargetBeamParams := stMachineTargetBeamParams,
-    i_stRequestedBeamParams := stReqBeamParams,
-    io_fbFFHWO := fbFFO);
+//Scenario setup: current and target eV inside the arbitrated request
+stCurBeamParams.neVRange := RANGE_IN_BOUNDS;
+stMachineTargetBeamParams.neVRange := RANGE_IN_BOUNDS;
+stReqBeamParams.neVRange := RANGE_REQUESTED;
 
-fbFFO.EvaluateOutput(q_xFastFaultOut=>q_Output);
-
-AssertFalse(q_Output,
-    'Limits moved beyond current and target beam, should produce a fault.');
-
-//Beam and target eV moved back within permitted ranges, reset clears fault
-stCurBeamParams.neVRange := F_eVRangeCalculator( 300, 0);
-
-stMachineTargetBeamParams.neVRange := F_eVRangeCalculator(300, 0);
-
-stReqBeamParams.neVRange := 2#0000_1111_0011_1111;
-
-fbFFO(i_xReset:=TRUE); //New reset request
-
-fbPEW.i_xReset := TRUE; //New reset request
-
-fbPEW(i_stCurrentBeamParams := stCurBeamParams, //Beam params are now within spec
-    i_stMachineTargetBeamParams := stMachineTargetBeamParams,
-    i_stRequestedBeamParams := stReqBeamParams,
-    io_fbFFHWO := fbFFO);
-
-fbFFO.EvaluateOutput(q_xFastFaultOut=>q_Output);
+//Stepping loop: acknowledge the watcher's fast fault and request the FFO clear,
+//then hold the sequence for several cycles so the output state is settled
+//before anything is asserted. The acknowledge is the fault table Reset bit the
+//EPICS layer writes; the watcher itself latches its fast fault.
+fbFFO.astFF[PEW_FAST_FAULT_INDEX].Reset := TRUE;
+fbFFO.i_xReset := TRUE;
+FOR nCycle := 1 TO N_CYCLES DO
+    fbPEW(i_stCurrentBeamParams := stCurBeamParams,
+        i_stMachineTargetBeamParams := stMachineTargetBeamParams,
+        i_stRequestedBeamParams := stReqBeamParams,
+        io_fbFFHWO := fbFFO);
+    fbFFO.EvaluateOutput(q_xFastFaultOut => q_Output);
+END_FOR
 
 AssertTrue(q_Output,
-    'Beam within limits after reset, FFO should be true');
+    'Setup: beam within limits, FFO should be true');
 
-//At this point, the fast fault would be cleared
+//Reset requests released, so the watcher alone decides the next transition
+fbFFO.i_xReset := FALSE;
 
-//Current beam eV moved out of range
-stCurBeamParams.neVRange := F_eVRangeCalculator(800, 0); //Moved out of range
+//Current beam leaves the arbitrated range
+stCurBeamParams.neVRange := RANGE_OUT_OF_BOUNDS;
 
-stMachineTargetBeamParams.neVRange := F_eVRangeCalculator(300, 0); //Still within range
-
-stReqBeamParams.neVRange := 2#0000_1111_0011_1111;
-
+//Single simulated cycle
 fbPEW(i_stCurrentBeamParams := stCurBeamParams,
     i_stMachineTargetBeamParams := stMachineTargetBeamParams,
     i_stRequestedBeamParams := stReqBeamParams,
     io_fbFFHWO := fbFFO);
-
-fbFFO.EvaluateOutput(q_xFastFaultOut=>q_Output);
+fbFFO.EvaluateOutput(q_xFastFaultOut => q_Output);
 
 AssertFalse(q_Output,
-    'Current beam moved beyond set limits, should produce a fault');
+    'Current beam moved beyond the arbitrated limits, the FFO should trip within one cycle');
 
-//Target beam eV moved out of range
-fbFFO(i_xReset:=FALSE); //Reset released
-fbFFO(i_xReset:=TRUE); //New reset request comes in at the top of a cycle, but will be overridden
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="PEWatcherFaultLatchesAcrossCycles" Id="{719e5396-cdc8-4de6-8f58-d2b9d37ff353}">
+      <Declaration><![CDATA[(*
+Multi cycle transition: the fault latches, and clearing it takes an acknowledge.
 
-stCurBeamParams.neVRange := F_eVRangeCalculator(300, 0); //Now within range
+The first loop holds the beam outside the arbitrated range and checks the output
+was low on every cycle. The second loop moves the beam back inside the range but
+withholds the acknowledge, which must not clear the latched fault. A single
+acknowledge cycle recovers the output, which then has to hold on further cycles.
+*)
+METHOD PEWatcherFaultLatchesAcrossCycles
+VAR_INPUT
+END_VAR
+VAR_INST
+    fbPEW    :    FB_PhotonEnergyWatcher; //Watcher under test
+    fbFFO    :    FB_HardwareFFOutput; //Fast fault output the watcher reports to
+    q_Output    :    BOOL; //Hardware output of the FFO, sampled every simulated cycle
+    stCurBeamParams    :    ST_BeamParams; //Current beam parameters
+    stMachineTargetBeamParams    :    ST_BeamParams; //Machine target beam parameters
+    stReqBeamParams    :    ST_BeamParams; //Requested (arbitrated) beam parameters
+    nCycle    :    UINT; //Cycle counter of the stepping loops
+    bHeldLow    :    BOOL; //TRUE while the FFO output was false on every stepped cycle
+    bHeldHigh    :    BOOL; //TRUE while the FFO output was true on every stepped cycle
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('PEWatcherFaultLatchesAcrossCycles');
 
-stMachineTargetBeamParams.neVRange := F_eVRangeCalculator(800, 0); //Moved out of range
+//Scenario setup: current and target eV inside the arbitrated request
+stCurBeamParams.neVRange := RANGE_IN_BOUNDS;
+stMachineTargetBeamParams.neVRange := RANGE_IN_BOUNDS;
+stReqBeamParams.neVRange := RANGE_REQUESTED;
 
-stReqBeamParams.neVRange := 2#0000_1111_0011_1111;
+//Stepping loop: acknowledge the watcher's fast fault and request the FFO clear,
+//then hold the sequence for several cycles so the output state is settled
+//before anything is asserted. The acknowledge is the fault table Reset bit the
+//EPICS layer writes; the watcher itself latches its fast fault.
+fbFFO.astFF[PEW_FAST_FAULT_INDEX].Reset := TRUE;
+fbFFO.i_xReset := TRUE;
+FOR nCycle := 1 TO N_CYCLES DO
+    fbPEW(i_stCurrentBeamParams := stCurBeamParams,
+        i_stMachineTargetBeamParams := stMachineTargetBeamParams,
+        i_stRequestedBeamParams := stReqBeamParams,
+        io_fbFFHWO := fbFFO);
+    fbFFO.EvaluateOutput(q_xFastFaultOut => q_Output);
+END_FOR
 
-fbPEW.i_xReset := TRUE; //Attempt to reset local FF will fail
+AssertTrue(q_Output,
+    'Setup: beam within limits, FFO should be true');
+
+//Stepping loop: current beam leaves the arbitrated range and stays there
+fbFFO.i_xReset := FALSE;
+stCurBeamParams.neVRange := RANGE_OUT_OF_BOUNDS;
+
+bHeldLow := TRUE;
+FOR nCycle := 1 TO N_CYCLES DO
+    fbPEW(i_stCurrentBeamParams := stCurBeamParams,
+        i_stMachineTargetBeamParams := stMachineTargetBeamParams,
+        i_stRequestedBeamParams := stReqBeamParams,
+        io_fbFFHWO := fbFFO);
+    fbFFO.EvaluateOutput(q_xFastFaultOut => q_Output);
+    bHeldLow := bHeldLow AND NOT q_Output;
+END_FOR
+
+AssertTrue(bHeldLow,
+    'Fault did not hold the FFO output off on every cycle of the fault loop');
+
+//Stepping loop: beam back inside the arbitrated range, acknowledge withheld
+stCurBeamParams.neVRange := RANGE_IN_BOUNDS;
+
+bHeldLow := TRUE;
+FOR nCycle := 1 TO N_CYCLES DO
+    fbPEW(i_stCurrentBeamParams := stCurBeamParams,
+        i_stMachineTargetBeamParams := stMachineTargetBeamParams,
+        i_stRequestedBeamParams := stReqBeamParams,
+        io_fbFFHWO := fbFFO);
+    fbFFO.EvaluateOutput(q_xFastFaultOut => q_Output);
+    bHeldLow := bHeldLow AND NOT q_Output;
+END_FOR
+
+AssertTrue(bHeldLow,
+    'Latched fault cleared itself while no acknowledge was given');
+
+//Single cycle with the acknowledge and the FFO clear request: the fault clears
+fbFFO.astFF[PEW_FAST_FAULT_INDEX].Reset := TRUE;
+fbFFO.i_xReset := TRUE;
 fbPEW(i_stCurrentBeamParams := stCurBeamParams,
     i_stMachineTargetBeamParams := stMachineTargetBeamParams,
     i_stRequestedBeamParams := stReqBeamParams,
     io_fbFFHWO := fbFFO);
+fbFFO.EvaluateOutput(q_xFastFaultOut => q_Output);
 
-fbFFO.EvaluateOutput(q_xFastFaultOut=>q_Output);
+AssertTrue(q_Output,
+    'Beam within limits and fault acknowledged, FFO should be true again');
 
-AssertFalse(q_Output,
-    'Target beam moved beyond set limits, should produce a fault');
+//Stepping loop: reset requests released, the recovered output must hold
+fbFFO.i_xReset := FALSE;
+bHeldHigh := TRUE;
+FOR nCycle := 1 TO N_CYCLES DO
+    fbPEW(i_stCurrentBeamParams := stCurBeamParams,
+        i_stMachineTargetBeamParams := stMachineTargetBeamParams,
+        i_stRequestedBeamParams := stReqBeamParams,
+        io_fbFFHWO := fbFFO);
+    fbFFO.EvaluateOutput(q_xFastFaultOut => q_Output);
+    bHeldHigh := bHeldHigh AND q_Output;
+END_FOR
+
+AssertTrue(bHeldHigh,
+    'FFO dropped out again after the acknowledge');
 
 TEST_FINISHED();]]></ST>
       </Implementation>
