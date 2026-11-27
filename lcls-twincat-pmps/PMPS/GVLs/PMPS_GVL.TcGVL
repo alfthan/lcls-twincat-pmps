@@ -52,6 +52,12 @@ VAR_GLOBAL CONSTANT
 
     TRANS_SCALING_FACTOR : REAL := REAL#1.0; // Scaling factor for fixed-point transmission
 
+    // Beam-parameter (BP) request limits. Declared once here so that every BP
+    // request default, clamp and bit mask is written in terms of the same value.
+    MAX_EVRANGE      : DWORD := 16#FFFF_FFFF; // All photon-energy ranges selected (full 32-bit mask)
+    MAX_BCRANGE      : WORD  := 16#7FFF; // All beam-class ranges selected (full 15-bit mask)
+    DEFAULT_BP_RATE  : UDINT := 10; // Default requested pulse rate for a BP request [Hz]
+
     AUX_ATTENUATORS : UINT := 16; // Maximum # of attenuators in the PMPS
     MAX_VETO_DEVICES   :   UINT := 16;
     stAttenuators : ST_PMPS_Attenuator :=(nTran:=1,xAttOK:=1);
