@@ -69,7 +69,7 @@
     <Compile Include="DUTs\InternalDUT\L_Attenuators.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="DUTs\InternalDUT\L_Stopper.TcDUT">
+    <Compile Include="DUTs\InternalDUT\E_Stopper.TcDUT">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="DUTs\InternalDUT\ST_AttenuatorStatus.TcDUT">
