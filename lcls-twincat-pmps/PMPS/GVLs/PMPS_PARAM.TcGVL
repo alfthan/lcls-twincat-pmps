@@ -1,7 +1,60 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <GVL Name="PMPS_PARAM" Id="{a73b5237-920e-4906-b8ec-4aaa7f8c0e45}" ParameterList="True">
-    <Declaration><![CDATA[{attribute 'qualified_only'}
+    <Declaration><![CDATA[(*
+    PMPS_PARAM : deployment limits for the PMPS fast-fault and beam-parameter
+    pools, and the transmission margin used by the beam-parameter comparison.
+
+    Purpose:
+        Collect, in one place, the numeric limits that size the PMPS pools and
+        that decide how much transmission slack the beam-parameter comparison
+        tolerates, so an installation is sized for its own machine instead of
+        the values being hard-coded in the blocks that consume them:
+          - MAX_FAST_FAULTS sizes a fast-fault output's registration pool and
+            the FFO logger's cumulative min-time-violation budget.
+          - MAX_ASSERTIONS sizes the arbiter's beam-parameter request pool
+            (and the assertion array published to EPICS) and is the capacity
+            the BPTM tests before it asserts a new transition.
+          - TRANS_MARGIN is the fraction above the requested transmission
+            level that F_SafeBPCompare still accepts as safe.
+
+    Usage:
+        Refer to the values as PMPS_PARAM.MAX_FAST_FAULTS,
+        PMPS_PARAM.MAX_ASSERTIONS and PMPS_PARAM.TRANS_MARGIN; the
+        qualified_only attribute below forbids unqualified access, so every use
+        site names the GVL explicitly. All three are CONSTANT and are therefore
+        compiled into the blocks that read them: changing one resizes the
+        arrays derived from it and needs a rebuild and download, not a live
+        write. None of them is EPICS-writable - the arrays they size are
+        published by their owning blocks instead
+        (FB_HardwareFFOutput.astFF, FB_BeamParamAssertionPool.epicsDataPool).
+
+    Objectives:
+        - One source of truth for pool capacity and the transmission margin,
+          so the consuming blocks cannot disagree about either.
+        - Keep the limits tunable per installation without editing logic.
+        - Keep TRANS_MARGIN reviewed together with
+          PMPS_GVL.TRANS_SCALING_FACTOR: the margin is added to the scaling
+          factor, so a new scaling factor invalidates the margin and the
+          TRANS_MARGIN comment must be re-checked.
+
+    History:
+        2020-09-09  Alex Wallace     : Created - parameterized the arbiter and FF
+                                       pool sizes so they can be customized per
+                                       application (MAX_FAST_FAULTS, then DINT,
+                                       changed to UINT on 2020-09-17;
+                                       MAX_ASSERTIONS = 20).
+        2020-11-05  Alex Wallace     : Margin constant added with the transmission
+                                       compare - a 5% margin above the defined
+                                       device thresholds.
+        2021-04-23  ghalym           : Margin carried as REAL#0.05 (unit test
+                                       fixes).
+        2025-04-22  Kaushik Malapati : TRANS_MARGIN raised from REAL#0.05 to
+                                       REAL#0.20.
+        2026-11-27  Audit fix        : Header added for audit finding #1128; no
+                                       constant, type or value changed.
+*)
+{attribute 'qualified_only'}
 VAR_GLOBAL CONSTANT
     MAX_FAST_FAULTS	:	UINT := 50; // Max fast faults for an FFO
     MAX_ASSERTIONS    :    UDINT := 20; //Maximum number of BP requests in the arbiter
