@@ -31,9 +31,9 @@ Usage:
     the second A_Add stores ADR( dataPool[that index] ) as the node's value.
 
 Objectives:
-    - The payload is copied once into the owner's dataPool at insert time and
-      only referenced from the table afterwards, so lookups and the arbiter's
-      walk over the pool never copy payload structs.
+    - The table moves no payload bytes: it holds a key and a pointer only. The
+      owning FB's actions copy the referenced dataPool row into their getValue
+      output when they hand a payload back to the caller.
     - The node stays at one key plus one pointer, so a pool sized from the
       PMPS_PARAM / PMPS_GVL limits keeps its node array small.
     - Only statically allocated storage is used, so table behaviour is
@@ -58,8 +58,8 @@ History:
 TYPE T_HashTableEntry :
 STRUCT
     // Search key of this node: unitless 32-bit identifier chosen by the
-    // table owner, hashed and compared as an integer by the Tc2_Utilities
-    // hash table.
+    // table owner, which the Tc2_Utilities hash table uses to find the node
+    // (A_Lookup, A_Remove and A_Add take it as their key input).
     //   FB_BeamParamAssertionPool: the arbitration request ID that
     //       FB_Arbiter.AddRequest was given as nReqID (unique per device +
     //       state, never 0 and never PMPS_GVL.EXCLUDED_ASSERTION_ID).
