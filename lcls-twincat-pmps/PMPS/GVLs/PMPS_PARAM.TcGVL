@@ -6,6 +6,8 @@ VAR_GLOBAL CONSTANT
     MAX_FAST_FAULTS	:	UINT := 50; // Max fast faults for an FFO
     MAX_ASSERTIONS    :    UDINT := 20; //Maximum number of BP requests in the arbiter
     TRANS_MARGIN : REAL := REAL#0.20; // Allowed % margin above requested transmission level in SafeBPCompare (0.2000 = 20deci% default). Note: change this value if scaling factor changes.
+    TEMP_RAW_ENDSTOP_MIN : INT := -32768; // Raw value a 16 bit temperature terminal reports at its low end stop (open, shorted or unpowered sensor); read as loss of signal
+    TEMP_RAW_ENDSTOP_MAX : INT := 32767; // Raw value a 16 bit temperature terminal reports at its high end stop (open, shorted or unpowered sensor); read as loss of signal
 END_VAR]]></Declaration>
   </GVL>
 </TcPlcObject>
