@@ -1,22 +1,50 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <DUT Name="ST_DeviceState" Id="{83155e5b-c608-4d41-b295-c67628bd27d3}">
-    <Declaration><![CDATA[TYPE ST_DeviceState :
+    <Declaration><![CDATA[(* Defines one state of a device (actuator): where its axis must sit and which
+beam parameters are permitted while it sits there.
+
+Purpose:
+    Hold everything the PMPS governor and arbiter need to know about a single
+    device state, so that a state number (nStateRef) resolves to a position
+    window plus a beam parameter set. One instance per state is stored in the
+    device state table (ST_Device.StateTable, an FB_LinearDeviceStateTable) and
+    is normally filled in at startup by F_SetStateParams.
+
+Usage:
+    stDevice.StateTable.A_Lookup(key := stateNumber) returns one of these. The
+    governor (FB_LinearGovernor) then compares rPosition +/- rTolerance with
+    stDevice.stAxis.NcToPlc.ActPos, widens its MPS limits to include that
+    window while the transition is permitted and re-engages them around it once
+    the move is latched, and trips a fast fault when the live beam parameters
+    are not safe for stReqBeamParam. This type describes a state definition; it
+    is not the live state of a device.
+
+Objectives:
+    - Keep the position window and the permitted beam parameters of one state in
+      one place, so a state can never be latched with the beam parameter set of
+      another state.
+    - Name the position unit explicitly, so a state table cannot be written in
+      the wrong unit and drive an axis to the wrong setpoint.
+
+History:
+    2019-08-28 A. Wallace  : Created while migrating these elements into the
+                             PMPS library.
+    2026-11-27 L. Numminen : Added this header and documented the meaning and
+                             units of every member.
+*)
+TYPE ST_DeviceState :
 STRUCT
 
-    //State name
-    sStateName	:	STRING;
-    nStateRef	:	UDINT; //Primary key of device state database
+    sStateName	:	STRING; //Human-readable state name for display and logging only; F_SetStateParams leaves it empty and states are keyed by nStateRef
+    nStateRef	:	UDINT; //Primary key of the device state database: the state number a device looks up in its state table
 
     //////////////////
     // This stuff may belong in a sub-class or something
-    //Position
-    rPosition	:	REAL := 0; //Center of the state
-    //Tolerance
-    rTolerance :	REAL := 0; //+/- amount
+    rPosition	:	REAL := 0; //Center of the state, in the actuator axis engineering units used by stDevice.stAxis.NcToPlc.ActPos (mm on the linear axes this governs, not encoder counts)
+    rTolerance :	REAL := 0; //Acceptance half width of the state, in the same unit as rPosition: the state is latched once the axis is at standstill inside rPosition +/- rTolerance, and the MPS limits are then re-engaged around exactly that window
     //////////////////
-    //Required beam parameters
-    stReqBeamParam	:	ST_BeamParams;
+    stReqBeamParam	:	ST_BeamParams; //Beam parameters (transmission, pulse rate, photon energy range, beam class, machine mode, attenuators, stoppers, apertures) that must hold while the device is in this state; the governor trips a fast fault when the live beam parameters are unsafe compared with this set
 
 END_STRUCT
 END_TYPE
