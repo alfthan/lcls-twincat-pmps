@@ -1,19 +1,40 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <DUT Name="ST_DeviceStateTable" Id="{03fca704-e94f-069c-15d5-ec1df795b0de}">
-    <Declaration><![CDATA[TYPE ST_DeviceStateTable :
+    <Declaration><![CDATA[(*
+ST_DeviceStateTable - one state row of a device state table.
+
+Purpose:
+    Describes the setpoint a single device state commands: which device the row
+    belongs to (iDeviceID) and which state it is (iStateID), the target position
+    with the tolerance band around it, and the beam parameters that state
+    requires (transmission, beam class, pulse rate, per-pulse energy and photon
+    energy range). The row is the shared contract between the configuration
+    source of the state table and the device logic that consumes it.
+
+Usage:
+    Fill one instance per device state and hand it to the device state logic that
+    commands the hardware. Every engineering value states its unit in the comment
+    next to it: a setpoint written in different units is applied silently and
+    mis-commands the device, so convert before writing the row.
+
+History:
+    2020-06-25 A. Wallace - initial declaration
+    2026-11-27            - header comment added, member meanings and units documented
+*)
+TYPE ST_DeviceStateTable :
 STRUCT
-    iDeviceID:DINT;
-    iStateID:DINT;
-    rTargetPosition: REAL;
-    rTolerance: REAL;
-    rTransmission: REAL;
-    iBeamClass : DINT;
-    iPulseRate: DINT;
-    rPerPulseEnergy:REAL;
-    rUpper_eV: REAL;
-    rLower_eV: REAL;
-    rPhotonEnergy: REAL;
+    iDeviceID : DINT; // Device this state row belongs to (device table key)
+    iStateID : DINT; // State key within that device's state table
+    rTargetPosition : REAL; // Commanded position of the device axis, in mm
+    rTolerance : REAL; // Allowed +/- band around rTargetPosition, in mm
+    rTransmission : REAL; // Required beam transmission fraction, 0.0 (blocked) .. 1.0 (full)
+    iBeamClass : DINT; // Required beam class code, see E_MPSBeamClasses (0 = beam off)
+    iPulseRate : DINT; // Required beam pulse repetition rate, in Hz (0 = no beam)
+    rPerPulseEnergy : REAL; // Required beam energy per pulse, in mJ
+    rUpper_eV : REAL; // Upper bound of the required photon energy range, in eV
+    rLower_eV : REAL; // Lower bound of the required photon energy range, in eV
+    rPhotonEnergy : REAL; // Required photon energy, in eV
 END_STRUCT
 END_TYPE
 ]]></Declaration>
