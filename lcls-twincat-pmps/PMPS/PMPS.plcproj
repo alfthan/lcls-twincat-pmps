@@ -222,13 +222,13 @@
       <SubType>Code</SubType>
       <LinkAlways>true</LinkAlways>
     </Compile>
+    <Compile Include="HelperFunctions\TypeTranslators\F_IO_TO_BP.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="HelperFunctions\TypeTranslators\IO_TO_APT.TcPOU">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="HelperFunctions\TypeTranslators\IO_TO_ATT.TcPOU">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="HelperFunctions\TypeTranslators\IO_TO_BP.TcPOU">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="ImplicitChecks\CheckBounds.TcPOU">

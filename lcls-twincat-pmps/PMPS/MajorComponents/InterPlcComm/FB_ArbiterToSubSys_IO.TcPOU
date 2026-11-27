@@ -85,7 +85,7 @@ END_VAR
     <Implementation>
       <ST><![CDATA[
 // Incoming request from subsystem PLC
-RequestedBP := IO_TO_BP(i_RequestedBP);
+RequestedBP := F_IO_TO_BP(i_RequestedBP);
 
 // Update Arbiter with our request
 rtToggle(CLK:= i_RequestedBP.xValid); // If interface resumes, reset/catch up

@@ -1,0 +1,36 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="F_IO_TO_BP" Id="{9adf1afe-3d64-4ec4-b76c-d1ce92f03d86}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION F_IO_TO_BP : ST_BeamParams
+VAR_INPUT
+    IO : ST_BeamParams_IO;
+END_VAR
+VAR
+    idx : UINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+FOR idx := 1 TO PMPS_GVL.AUX_ATTENUATORS DO
+    F_IO_TO_BP.astAttenuators[idx] := IO_TO_ATT(IO.astAttenuators[idx]);
+END_FOR
+
+FOR idx := 1 TO PMPS_GVL.MAX_APERTURES DO
+    F_IO_TO_BP.astApertures[idx] := IO_TO_APT(IO.astApertures[idx]);
+END_FOR
+
+F_IO_TO_BP.aVetoDevices := IO.aVetoDevices;
+F_IO_TO_BP.nTran := IO.nTran;
+F_IO_TO_BP.nCohortInt := ULINT_TO_UDINT(IO.nCohortInt);
+F_IO_TO_BP.neVRange := IO.neVRange;
+F_IO_TO_BP.neV := IO.neV;
+F_IO_TO_BP.nBCRange := IO.nBCRange;
+F_IO_TO_BP.nBeamClass := IO.nBeamClass;
+F_IO_TO_BP.nMachineMode := IO.nMachineMode;
+F_IO_TO_BP.nRate := IO.nRate;
+F_IO_TO_BP.xValid := IO.xValid;
+F_IO_TO_BP.xValidToggle := IO.xValidToggle;]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>
