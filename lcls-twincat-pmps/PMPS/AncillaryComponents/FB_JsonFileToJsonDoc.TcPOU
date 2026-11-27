@@ -1,55 +1,106 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <POU Name="FB_JsonFileToJsonDoc" Id="{b6fe30de-ce9d-4faa-a7ae-6e28ef395974}" SpecialFunc="None">
-    <Declaration><![CDATA[FUNCTION_BLOCK FB_JsonFileToJsonDoc
+    <Declaration><![CDATA[(*
+    FB_JsonFileToJsonDoc - read a PMPS JSON database file and publish one device object.
+
+    Purpose:
+        Read a JSON file from the file system of the PLC this block runs on, parse it
+        into a JSON DOM, and publish the sub-object named by sPLCName as the
+        PMPS_jsonDoc output. This is the first half of the PMPS database pipeline:
+        FB_JsonDocToSafeBP takes the returned handle and copies the beam parameters of
+        each device state out of it.
+
+    Usage:
+        MOTION_GVL.fbPmpsFileReader(
+            io_fbFFHWO := io_fbFFHWO,
+            bExecute := bExecute AND sDirectory <> '',
+            sSrcPathName := CONCAT(CONCAT(sDirectory, sPlcName), '.json'),
+            sPLCName := sPlcName,
+            PMPS_jsonDoc => PMPS_GVL.BP_jsonDoc,
+        );
+        FB_Standard_PMPSDB (lcls-twincat-motion) is the production caller; it pulses
+        bExecute when a motion PLC is enabled or refreshed. bBusy is TRUE while the file
+        is opened, read, closed and parsed. On success PMPS_jsonDoc is non-zero, bHasPLC
+        reports whether the sPLCName member was found, and bError is FALSE. On failure
+        bError stays TRUE until the next rising edge of bExecute, nErrId and sErrMsg
+        describe the failure, PMPS_jsonDoc is left at 0, and the fast fault is raised -
+        so a missing or corrupt database can never be mistaken for valid beam parameters.
+
+    Objectives:
+        - One block owns the ADS open/read/close sequence and the JSON parse, so device
+          code only ever deals with a JSON document handle.
+        - Fail loudly and fail safe: a file, parse or lookup error drops the fast-fault
+          output (type code 16#FF13) and is logged at Critical severity instead of
+          silently retrying with stale data.
+        - Bound every ADS call with tTimeOut (DEFAULT_ADS_TIMEOUT) so a hung file
+          service cannot stall the PLC cycle indefinitely.
+
+    History:
+        2022-11-05  ghalym        Added together with the JSON reader/DOM parser split.
+        2023-01-23  ghalym        FFO reset and state-count/boundary fixes.
+        2023-01-31  ghalym        Clear the read buffer before every read.
+        2024-01-29  ghalym        Reformatted by pre-commit.
+        2026-11-27  Scirix agent  Added this header and the per-declaration meaning/units
+                                  comments; no functional change (audit finding #227,
+                                  convention conv_321640e095c0).
+
+    Note:
+        Step 1 assigns sSrcNetId from fb_GetLocalAmsNetId, so the file is always read
+        from the PLC this block runs on; the sSrcNetId input has no effect today and is
+        kept for interface compatibility only. The whole file is read into a single
+        STRING(100000), so a file longer than 100000 characters is truncated by the read
+        and then fails to parse rather than being read in chunks.
+*)
+FUNCTION_BLOCK FB_JsonFileToJsonDoc
 VAR_INPUT
-    bExecute             : BOOL; //Rising Edge
-    sPLCName			 : STRING;
-    sSrcNetId            : T_AmsNetId;
-    sSrcPathName         : T_MaxString;
+    bExecute             : BOOL; // Rising edge: start one read-and-parse cycle; holding TRUE adds nothing
+    sPLCName			 : STRING; // JSON member holding this PLC's data, e.g. 'lfe-motion'; also the FFO device name
+    sSrcNetId            : T_AmsNetId; // AMS Net ID of the file source; overwritten by the local ID in step 1
+    sSrcPathName         : T_MaxString; // Database file path on the source, e.g. '<dir>/<sPLCName>.json'
 END_VAR
 VAR_OUTPUT
-    PMPS_jsonDoc 		: SJsonValue;
-    bHasPLC              : BOOL;
-    bBusy                : BOOL;
-    bError               : BOOL;
-    nErrId               : UDINT;
-    sErrMsg				 :STRING;
+    PMPS_jsonDoc 		: SJsonValue; // JSON object for sPLCName; 0 until a read succeeds
+    bHasPLC              : BOOL; // TRUE when the parsed document contains the sPLCName member
+    bBusy                : BOOL; // TRUE from the bExecute rising edge until the cycle ends
+    bError               : BOOL; // TRUE when the last cycle failed; cleared by the next bExecute rising edge
+    nErrId               : UDINT; // File/ADS error id, or 900+Step for parse/lookup errors; 0 when no error
+    sErrMsg				 :STRING; // Description of the last error, also logged at Critical severity
 END_VAR
 VAR_IN_OUT
-    io_fbFFHWO    :    FB_HardwareFFOutput;
+    io_fbFFHWO    :    FB_HardwareFFOutput; // Fast-fault output this block contributes to (type code 16#FF13)
 END_VAR
 VAR
     (*Get AMS Net ID*)
-    fb_GetLocalAmsNetId: FB_GetLocalAmsNetId;
+    fb_GetLocalAmsNetId: FB_GetLocalAmsNetId; // Supplies the AMS Net ID used as the file source
 
     (* JSON *)
-    fbJson 			: FB_JsonDomParser;
-    jsonDoc 		: SJsonValue;
-    jsonProp		: SJsonValue;
+    fbJson 			: FB_JsonDomParser; // Owns the parsed JSON document
+    jsonDoc 		: SJsonValue; // Handle of the whole parsed document
+    jsonProp		: SJsonValue; // Handle of the sPLCName member; PMPS_jsonDoc is copied from it
 
     (*File*)
-    fbFileOpen           : FB_FileOpen;
-    fbFileClose          : FB_FileClose;
-    fbFileRead           : FB_FileRead;
-    hSrcFile             : UINT := 0;(* File handle of the source file *)
-    Step: INT;
-    index: DINT;
-    RisingEdge           : R_TRIG;
+    fbFileOpen           : FB_FileOpen; // ADS file-open transaction, bounded by tTimeOut
+    fbFileClose          : FB_FileClose; // ADS file-close transaction, bounded by tTimeOut
+    fbFileRead           : FB_FileRead; // ADS file-read transaction, reads up to SIZEOF(sbuffRead) bytes
+    hSrcFile             : UINT := 0; // File handle of the source file; 0 = no file open
+    Step: INT; // 0 idle, 1-7 open/read/close, 8 cleanup, 10-30 parse/lookup, 900+n = error in step n
+    index: DINT; // Loop counter used to clear the read buffer before each read
+    RisingEdge           : R_TRIG; // Detects the bExecute rising edge
     (* Buffer *)
-    sbuffRead			:STRING(100000);
-    cbReadLength         : UDINT := 0;
-    nFileLength	 : UDINT := 0;
-    bfbJsonExceptionRaised: BOOL;
-    tTimeOut             : TIME := DEFAULT_ADS_TIMEOUT;
-    bInit : BOOL;
+    sbuffRead			:STRING(100000); // Whole file (chars = bytes); a longer file is truncated and fails to parse
+    cbReadLength         : UDINT := 0; // Bytes returned by the last FB_FileRead
+    nFileLength	 : UDINT := 0; // Bytes read from the file so far this cycle; 0 means the file was empty
+    bfbJsonExceptionRaised: BOOL; // TRUE when the parser reported an exception for this document
+    tTimeOut             : TIME := DEFAULT_ADS_TIMEOUT; // Timeout applied to every ADS file call
+    bInit : BOOL; // First-scan latch that starts fb_GetLocalAmsNetId once
     (*Logger*)
-    tNewMessage : R_TRIG;
-    fbLogger : FB_LogMessage := (eSubsystem:=E_SubSystem.MPS, nMinTimeViolationAcceptable:=10);
+    tNewMessage : R_TRIG; // Rising edge of a new, non-empty sErrMsg - forwards it to fbLogger
+    fbLogger : FB_LogMessage := (eSubsystem:=E_SubSystem.MPS, nMinTimeViolationAcceptable:=10); // MPS logger
     (*FFO*)
-    FFO    :    FB_FastFault :=(
-        i_Desc := 'Fault occurs when there is an error reading json file',
-        i_TypeCode := 16#FF13);
+    FFO    :    FB_FastFault :=( // Held FALSE while a file/parse error is present; auto-resets
+        i_Desc := 'Fault occurs when there is an error reading json file', // Fast-fault description
+        i_TypeCode := 16#FF13); // PMPS type code: JSON database load failure
 END_VAR
 ]]></Declaration>
     <Implementation>
