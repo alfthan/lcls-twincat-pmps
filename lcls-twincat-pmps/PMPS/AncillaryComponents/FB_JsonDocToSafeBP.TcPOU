@@ -232,8 +232,8 @@ IF bHasAllParameters THEN
     jsonParam := fbJson.FindMember(jsonValue, 'ap_name');
     sAperture := fbJson.GetString(jsonParam);
 {IF defined (L)}
-    IF ('SL1L0' = sAperture) THEN nAperture := L_Apertures.SL1L0;
-    ELSIF ('SL2L0' = sAperture) THEN nAperture := L_Apertures.SL2L0;
+    IF ('SL1L0' = sAperture) THEN nAperture := E_Apertures.SL1L0;
+    ELSIF ('SL2L0' = sAperture) THEN nAperture := E_Apertures.SL2L0;
     END_IF
 {ELSIF defined (K)} // Attribute 'to_string' only build 4024 TO_STRING(PMPS.K_Apertures.SL1K0) - need another non hardcoded way
     IF ('SL1K0' = sAperture) THEN nAperture := K_Apertures.SL1K0;

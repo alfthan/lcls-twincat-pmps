@@ -1,9 +1,9 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
-  <EnumerationTextList Name="L_Apertures" Id="{894d4fff-bd3f-4ef2-a8fa-499ec344c700}">
+  <EnumerationTextList Name="E_Apertures" Id="{894d4fff-bd3f-4ef2-a8fa-499ec344c700}">
     <Declaration><![CDATA[{attribute 'qualified_only'}
 {attribute 'strict'}
-TYPE L_Apertures :
+TYPE E_Apertures :
 (
     SL1L0 := 1,
     SL2L0 := 2

@@ -48,6 +48,9 @@
     <Compile Include="AncillaryComponents\FB_PressSensor_FFO.TcPOU">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="DUTs\InternalDUT\E_Apertures.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="DUTs\InternalDUT\E_MPSBeamRates.TcDUT">
       <SubType>Code</SubType>
     </Compile>
@@ -61,9 +64,6 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="DUTs\InternalDUT\K_Stopper.TcDUT">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="DUTs\InternalDUT\L_Apertures.TcDUT">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="DUTs\InternalDUT\L_Attenuators.TcDUT">
