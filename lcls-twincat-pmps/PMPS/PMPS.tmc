@@ -22435,7 +22435,7 @@ Sets the beam class assertion lines for a given beam class.
         <Comment> local State &lt;&gt; OP</Comment>
       </EnumInfo>
       <EnumInfo>
-        <Text>RemoteNotConnected</Text>
+        <Text>ExternalDeviceNotConnected</Text>
         <Enum>2</Enum>
         <Comment> far device not present</Comment>
       </EnumInfo>
@@ -22477,7 +22477,7 @@ Sets the beam class assertion lines for a given beam class.
         <Enum>1</Enum>
       </EnumInfo>
       <EnumInfo>
-        <Text>RemoteNotConnected</Text>
+        <Text>ExternalDeviceNotConnected</Text>
         <Enum>2</Enum>
       </EnumInfo>
       <EnumInfo>

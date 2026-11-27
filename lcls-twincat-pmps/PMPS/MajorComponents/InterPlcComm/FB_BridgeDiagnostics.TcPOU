@@ -28,7 +28,12 @@ closes that 3-cycle gap for the low-consequence case; bBridgeConfirmedBad
 deliberately keeps the 3-cycle corroboration wait on EL6695, since that's the
 correct trade-off for a fault trip. Local ESM-not-OP faults (nBridgeState) behave
 identically on both terminal types and are already the highest-priority check in
-eLinkStatus, ahead of any payload or toggle state. *)
+eLinkStatus, ahead of any payload or toggle state.
+
+eLinkStatus/eConnectionStatus are typed with the LCLS General diagnostics enums
+(E_BridgeLinkStatus/E_BridgeStatus). PMPS keeps no local copy of either, so the
+member set is always the library's -- ExternalDeviceNotConnected, matching the
+bExternalDeviceNotConnected PDO input -- and cannot drift from it. *)
 FUNCTION_BLOCK FB_BridgeDiagnostics
 VAR_INPUT
     sName : STRING := 'BridgeDiagnostics';
@@ -79,7 +84,7 @@ END_VAR
       <ST><![CDATA[IF (nBridgeState AND 16#000F) <> E_EcCommState.eEcState_OP THEN
     eLinkStatus := E_BridgeLinkStatus.LocalNotOperational;
 ELSIF bExternalDeviceNotConnected THEN
-    eLinkStatus := E_BridgeLinkStatus.RemoteNotConnected;
+    eLinkStatus := E_BridgeLinkStatus.ExternalDeviceNotConnected;
 ELSIF bTxPdoState THEN
     eLinkStatus := E_BridgeLinkStatus.RemoteNotOperational;
 ELSE
@@ -100,7 +105,7 @@ END_IF
 
 CASE eLinkStatus OF
     E_BridgeLinkStatus.LocalNotOperational:        eConnectionStatus := E_BridgeStatus.LocalNotOperational;
-    E_BridgeLinkStatus.RemoteNotConnected: eConnectionStatus := E_BridgeStatus.RemoteNotConnected;
+    E_BridgeLinkStatus.ExternalDeviceNotConnected:  eConnectionStatus := E_BridgeStatus.ExternalDeviceNotConnected;
     E_BridgeLinkStatus.RemoteNotOperational:       eConnectionStatus := E_BridgeStatus.RemoteNotOperational;
 ELSE
     CASE eDataStatus OF
