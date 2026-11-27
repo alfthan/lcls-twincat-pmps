@@ -100,8 +100,9 @@ VAR_INST
         i_xAutoReset := TRUE);
     fbFFO    :    FB_HardwareFFOutput := (i_sNetID:='',
         bAutoReset := TRUE);
-    rFF : REFERENCE TO ST_FF;
+    rFF : REFERENCE TO ST_FF; //Reference into the FFO's FF array, only valid once xRegValid is TRUE
 
+    xRegValid : BOOL; //TRUE once RegistrationIdx is bounds-checked and rFF is validated
     FirstPass : BOOL := TRUE;
     fbTimePass : BOOL := TRUE;
     OvrdActvTstDone : BOOL := FALSE;
@@ -143,14 +144,39 @@ IF  FirstPass  THEN
     AssertFalse(fbFFO.q_xFastFaultOut,
         'Fast fault did not trip the beam');
 
-    rFF REF= fbFFO.astFF[fbFF.RegistrationIdx];
+    //RegistrationIdx is handed back by FB_HardwareFFOutput.Register, which returns an
+    //index past the array upper bound when registration fails. Bounds-check it before
+    //indexing, otherwise the reference below points outside the FFO's FF array.
+    IF fbFF.RegistrationIdx < 1 OR fbFF.RegistrationIdx > PMPS_PARAM.MAX_FAST_FAULTS THEN
+
+        AssertTrue(FALSE, 'FF registration index is outside the FFO FF array');
+        TestsDone := TRUE;
+
+    ELSE
+
+        rFF REF= fbFFO.astFF[fbFF.RegistrationIdx];
+
+        //Do not dereference an unbound reference; take the test out on failure.
+        IF NOT __ISVALIDREF(rFF) THEN
+
+            AssertTrue(FALSE, 'FF registration returned an invalid FF reference');
+            TestsDone := TRUE;
+
+        ELSE
+
+            xRegValid := TRUE;
+
+        END_IF
+
+    END_IF
 
 FirstPass := FALSE;
 
 END_IF
 
 
-IF fbTime.bValid AND fbTimePass  THEN
+//Only write through rFF once the reference has been validated.
+IF xRegValid AND fbTime.bValid AND fbTimePass  THEN
 
     Now := SystemTime_TO_DT(fbTime.systemTime);
     Expire:= fbTime.systemTime;
@@ -173,21 +199,26 @@ fbFF(io_fbFFHWO := fbFFO, //FF faulted
 fbFFO.ExecuteNoLog(); //FFO eval called at end of cycle
 
 
-IF rFF.Ovrd.Active AND rFF.BeamPermitted THEN
+//Only read through rFF once the reference has been validated.
+IF xRegValid THEN
 
-    AssertTrue(fbFFO.q_xFastFaultOut,
-        'Fast fault should be overridden so FFO should be true');
+    IF rFF.Ovrd.Active AND rFF.BeamPermitted THEN
 
-    OvrdActvTstDone := TRUE;
-END_IF
+        AssertTrue(fbFFO.q_xFastFaultOut,
+            'Fast fault should be overridden so FFO should be true');
 
-IF OvrdActvTstDone and NOT rFF.Ovrd.Active and not rff.BeamPermitted THEN
+        OvrdActvTstDone := TRUE;
+    END_IF
 
-    AssertFalse(fbFFO.q_xFastFaultOut,
-        'Fast fault override expired so beam should be off.');
-   // AssertFalse(rFF.BeamPermitted, 'Beam should not be permitted now');
+    IF OvrdActvTstDone and NOT rFF.Ovrd.Active and not rff.BeamPermitted THEN
 
-    TestsDone := TRUE;
+        AssertFalse(fbFFO.q_xFastFaultOut,
+            'Fast fault override expired so beam should be off.');
+       // AssertFalse(rFF.BeamPermitted, 'Beam should not be permitted now');
+
+        TestsDone := TRUE;
+    END_IF
+
 END_IF
 
 
@@ -211,8 +242,17 @@ END_VAR]]></Declaration>
 
 fbFF(io_fbFFHWO := fbFFO);
 
-AssertEquals_STRING(fbFF.sPath, fbFFO.astFF[fbFF.RegistrationIdx].Info.sPath,
-    'FF registration with FFO did not succeed');
+//Bounds-check the registration index before reading the FFO's FF array entry.
+IF fbFF.RegistrationIdx < 1 OR fbFF.RegistrationIdx > PMPS_PARAM.MAX_FAST_FAULTS THEN
+
+    AssertTrue(FALSE, 'FF registration index is outside the FFO FF array');
+
+ELSE
+
+    AssertEquals_STRING(fbFF.sPath, fbFFO.astFF[fbFF.RegistrationIdx].Info.sPath,
+        'FF registration with FFO did not succeed');
+
+END_IF
 
 TEST_FINISHED();]]></ST>
       </Implementation>
