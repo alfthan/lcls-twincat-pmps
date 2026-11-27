@@ -6,12 +6,12 @@ STRUCT
     {attribute 'pytmc' := '
         pv: Info
      '}
-    Info : ST_FFInfo;
+    Info : ST_FFInfo; // Static fast fault description data, written once at registration
 
     {attribute 'pytmc' := '
         pv: Ovrd
      '}
-    Ovrd : ST_FFOverride;
+    Ovrd : ST_FFOverride; // Manual override cluster, true for the override duration
 
     {attribute 'pytmc' := '
         pv: OK
@@ -20,7 +20,7 @@ STRUCT
     OK   :   BOOL; // Fault logic state
 
     FaultAck : BOOL; // Set when faulted, reset by logger.
-    ClearAck : BOOL;
+    ClearAck : BOOL; // Set when this fault clears, reset by logger.
 
     {attribute 'pytmc' := '
         pv: BeamPermitted
@@ -32,11 +32,11 @@ STRUCT
         pv: Reset
         io: o
      '}
-    Reset   :   BOOL;
+    Reset   :   BOOL; // Requested reset, rising edge clears the fault latch
 
-    bsFF    :    RS;
-    rtReset    :    R_TRIG;
-    ftCountFault : F_TRIG;
+    bsFF    :    RS; // Fault-clear latch: set by reset edge, dropped when OK is lost
+    rtReset    :    R_TRIG; // Rising edge detector for reset requests
+    ftCountFault : F_TRIG; // Falling edge detector on the fault-clear latch, counts a new fault
 
 END_STRUCT
 END_TYPE
