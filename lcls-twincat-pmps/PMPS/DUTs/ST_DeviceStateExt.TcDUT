@@ -1,12 +1,55 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <DUT Name="ST_DeviceStateExt" Id="{5cd60f9f-dadd-0ea0-1a1b-6a46a8d3dc5a}">
-    <Declaration><![CDATA[//Use when working with states in code
-//Extended with a valid boolean to indicate the structure was loaded
-//properly
+    <Declaration><![CDATA[(*
+    ST_DeviceStateExt - an ST_DeviceState plus a validity flag for lookups.
+
+    PURPOSE
+        Carries one device state (state name, state reference, position,
+        tolerance and the beam parameters that state requires) together with
+        xValid, which says whether the structure was produced by a successful
+        device-state-table lookup or is a default/unloaded state. The state
+        fields are inherited unchanged from ST_DeviceState; this DUT adds no
+        data of its own beyond the validity flag.
+
+    USAGE
+        Return type of F_DeviceState_To_DeviceStateExt, which copies an
+        ST_DeviceState and sets xValid from its i_xValid argument, and the
+        declared type of the state holders in FB_LinearGovernor
+        (stInitDeviceState, stTargetState, stLatchedTargetState). The producer
+        sets xValid TRUE only when the state-table lookup it translated
+        succeeded (stDevice.StateTable.bOk); when the lookup fails the caller
+        forces xValid := FALSE after the translation.
+
+    OBJECTIVES
+        - Give consumers a documented way to tell "the requested state was
+          found" from "the requested state does not exist", because a missing
+          state and a found state whose position happens to be 0 are otherwise
+          indistinguishable.
+        - Keep ST_DeviceState free of validity handling, so code that has no
+          lookup to report keeps using the base struct.
+        - Default to FALSE so an instance that was never assigned never reads
+          as a valid state.
+
+    HISTORY
+        2019-08-28 / Alex Wallace
+            DUT added with the PMPS library migration.
+        2026-11-27 / Scirix Agent
+            Added this header and the xValid meaning comment; declaration
+            otherwise unchanged (audit finding #245, convention
+            conv_321640e095c0).
+
+    NOTE
+        An invalid structure is not blanked: on a failed lookup only xValid is
+        cleared, so the inherited fields keep the values of the last successful
+        lookup (or their defaults). Consumers must therefore test xValid before
+        using rPosition, rTolerance or stReqBeamParam. Nothing in this library
+        reads xValid today - FB_LinearGovernor writes it and reports lookup
+        failures through its own xInitFault / xStateLookupError instead.
+*)
 TYPE ST_DeviceStateExt EXTENDS ST_DeviceState :
 STRUCT
-    xValid	:	BOOL := FALSE;
+    xValid	:	BOOL := FALSE; // TRUE when the extended state structure was loaded/valid
 END_STRUCT
 END_TYPE
 ]]></Declaration>
