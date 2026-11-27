@@ -1,15 +1,53 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <POU Name="F_SafeBPCompare0Rate" Id="{61333098-b080-43b8-8c0d-b267fc83ae7a}" SpecialFunc="None">
-    <Declaration><![CDATA[(*Compares BeamParam1 to BeamParam2: if the parameters of BeamParam1 are more conservative than BeamParam2
-the result will be true. *)
-(* When the Mode PV is in Cu 0-rate means this function will return true regardless of other conditions if the beam rate
-is zero *)
-(* When the Mode PV is in SC 0-bc means this function will return true regardless of other conditions if the beam class
-is zero *)
+    <Declaration><![CDATA[(* F_SafeBPCompare0Rate
+Compares two beam parameter sets and answers whether BeamParam1 is at least as conservative as
+BeamParam2, i.e. whether the beam parameters currently in effect are safe under the assertion
+BeamParam2 describes.
+
+Usage - a FUNCTION, so it holds no state and may be called from any task:
+    xTranBP := F_SafeBPCompare0Rate(stCurrentBeamParameters, i_stTransitionAssertion);
+Assertion status is deliberately not considered here: the caller must also confirm that
+BeamParam2 is active in the arbiter (e.g. FB_Arbiter.CheckRequest).
+
+Objectives:
+- Give the beam parameter transition manager one "is the beam safe right now" decision to make
+  before it advances to the next transition state.
+- Treat a machine that is not delivering beam as unconditionally safe, because the plain
+  comparison would otherwise let beam back while the machine is not ready: in NC mode
+  (stCurrentBeamParameters.nMachineMode = 0) a zero pulse rate, and in SC mode (= 1) a
+  BeamParam1.nBCRange of 1 or less, mask every other consideration.
+- Keep every other rule - transmission, photon energy, pulse rate, beam class, attenuators and
+  apertures - in exactly one place by delegating to F_SafeBPCompare.
+- Ignore status and veto devices; those are evaluated elsewhere.
+
+Operand meaning and units, for both inputs (members of ST_BeamParams):
+    nTran                          transmission, fraction 0..1 (0 = fully attenuated)
+    nRate                          pulse rate, Hz (0 .. 1E6)
+    neV, neVRange                  photon energy, eV, and the bitmask of allowed energy ranges
+    nBCRange                       bitmask of allowed beam classes
+    astAttenuators[n].nTran        attenuator transmission, %
+    astApertures[n].Width/Height   slit separation, mm
+
+History:
+- A. Wallace 2020-09-10: Created. Split out of F_SafeBPCompare to avoid the pitfall of allowing
+  beam back when the machine is not ready.
+- ghalym 2023-01-31: Added the machine-mode gate to the zero-rate (NC) and zero-beam-class (SC)
+  shortcuts.
+- 2026-11-27: Documentation only - added the objectives and history sections and documented both
+  operands (meaning and units). No behavioural change.
+*)
 FUNCTION F_SafeBPCompare0Rate : BOOL
 VAR_INPUT
-    BeamParam1    :    ST_BeamParams; //Must be more conservative than 2
+    (* Candidate set under evaluation; normally the beam parameters currently in effect. Uses the
+    members and units listed in the header (nTran fraction 0..1, nRate Hz, neV/neVRange eV,
+    nBCRange beam-class bitmask, attenuator nTran in %, aperture Width/Height in mm). This is the
+    set that must be no more permissive than BeamParam2 for the comparison to return TRUE. *)
+    BeamParam1    :    ST_BeamParams;
+    (* Reference set that constrains BeamParam1; normally the transition or final assertion the
+    machine has to satisfy. Same members and units as BeamParam1, compared member-wise by
+    F_SafeBPCompare. Whether it is actually asserted in the arbiter is checked by the caller. *)
     BeamParam2    :    ST_BeamParams;
 END_VAR
 VAR
