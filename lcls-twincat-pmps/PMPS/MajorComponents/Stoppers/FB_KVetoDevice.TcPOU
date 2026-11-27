@@ -17,8 +17,8 @@ END_VAR
 VAR_INPUT
     bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
     bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
-    eVetoDeviceIN : K_Stopper := K_Stopper.DEFAULT;
-    eVetoDeviceOUT : K_Stopper := K_Stopper.DEFAULT;
+    eVetoDeviceIN : E_Stopper := E_Stopper.DEFAULT;
+    eVetoDeviceOUT : E_Stopper := E_Stopper.DEFAULT;
     sVetoDeviceName : STRING;
 END_VAR
 ]]></Declaration>
