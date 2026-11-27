@@ -5,6 +5,12 @@
 // Run at the top of your cycle to receive the latest BP
 // Bridge health (bBridgeOk / bBridgeConfirmedBad / *Status outputs) is derived by
 // FB_BridgeDiagnostics and forwarded here unchanged, so the PV interface stays stable.
+//
+// The inbound current-BP payload is untrusted fieldbus data: its REAL fields are routed
+// through FB_FallibleRealFromEtherCAT (NaN/Inf and out-of-span rejection, last-trusted-value
+// hold) and the whole set is consumed only when the bridge is healthy and the payload is
+// valid (bCurrentBPValid). A payload that stays invalid past its qualification time is as
+// unusable as a dead link and joins the same fast fault.
 FUNCTION_BLOCK FB_SubSysToArbiter_IO IMPLEMENTS I_HigherAuthority
 VAR_INPUT
     Reset : BOOL; // Fast fault reset
@@ -46,6 +52,12 @@ VAR_OUTPUT
         io: i
     '}
     eConnectionStatus : E_BridgeStatus;
+    // inbound current-BP payload accepted this cycle: bridge healthy and both REAL fields trusted
+    {attribute 'pytmc' := '
+        pv: CurrentBPValid
+        io: i
+    '}
+    bCurrentBPValid : BOOL;
 END_VAR
 VAR_IN_OUT
     Arbiter	: FB_Arbiter;
@@ -89,23 +101,16 @@ VAR
 
     // Link/data health derivation, shared with FB_ArbiterToSubSys_IO
     fbDiag : FB_BridgeDiagnostics;
+
+    // Sanitizers for the REAL fields of the inbound current-BP PDO
+    fbCurBPTransmission : FB_FallibleRealFromEtherCAT;
+    fbCurBPPhotonEnergy : FB_FallibleRealFromEtherCAT;
 END_VAR
 ]]></Declaration>
     <Implementation>
-      <ST><![CDATA[//Receiving current BP state
-PMPS_GVL.stCurrentBeamParameters := IO_TO_BP(i_stCurrentBP);
-PMPS_GVL.stCurrentBeamParameters.xValidToggle := xTxPDO_toggle; // This line must follow the one above. Sequence is important.
-
-// Forwarding BP request for the subsystem
-fbVetoArb.bVeto := i_bVeto;
-fbVetoArb(HigherAuthority:=THIS^, LowerAuthority:=Arbiter, FFO:=fbFFHWO);
-
-//Broadcasting current request
-PMPS_GVL.stRequestedBeamParameters := IO_TO_BP(q_stRequestedBP);
-
-
-q_stRequestedBP.xValid := TRUE; // This is set and held true here every cycle to prove the PLC on this side is still running
-
+      <ST><![CDATA[
+// Bridge, link and data health first: the inbound payload below is only consumed when this
+// says the bridge is up and its data is live.
 fbDiag(
     sName := sName,
     nBridgeState := nBridgeState,
@@ -123,16 +128,59 @@ fbDiag(
     eConnectionStatus=>eConnectionStatus
 );
 
+// Sanitize the two REAL fields of the inbound payload: they cross the bridge as raw PDO
+// data and may be NaN/Inf or outside their physical span. Each FB holds the last trusted
+// value while the bridge is down or the sample is not trustworthy.
+fbCurBPTransmission(
+    i_bBridgeOk := bBridgeOk,
+    i_fValue := i_stCurrentBP.nTran,
+    i_fMinValue := PMPS_PARAM.MIN_TRANSMISSION,
+    i_fMaxValue := PMPS_PARAM.MAX_TRANSMISSION,
+    tInvalidQualifyTime := PMPS_PARAM.T_INPUT_INVALID_TIMEOUT,
+    sName := CONCAT(sName, ':CurrentBP:Transmission'));
+
+fbCurBPPhotonEnergy(
+    i_bBridgeOk := bBridgeOk,
+    i_fValue := i_stCurrentBP.neV,
+    i_fMinValue := PMPS_PARAM.MIN_PHOTON_ENERGY_EV,
+    i_fMaxValue := PMPS_PARAM.MAX_PHOTON_ENERGY_EV,
+    tInvalidQualifyTime := PMPS_PARAM.T_INVALID_QUALIFY_TIME_UNUSED,
+    sName := CONCAT(sName, ':CurrentBP:PhotonEnergy'));
+
+// Receiving current BP state. The set is consumed only when the bridge is healthy and both
+// REAL fields are trusted; otherwise the last trusted set stays in PMPS_GVL untouched.
+bCurrentBPValid := bBridgeOk AND fbCurBPTransmission.bValid AND fbCurBPPhotonEnergy.bValid;
+
+IF bCurrentBPValid THEN
+    PMPS_GVL.stCurrentBeamParameters := IO_TO_BP(i_stCurrentBP);
+    PMPS_GVL.stCurrentBeamParameters.nTran := fbCurBPTransmission.fValue;
+    PMPS_GVL.stCurrentBeamParameters.neV := fbCurBPPhotonEnergy.fValue;
+    PMPS_GVL.stCurrentBeamParameters.xValidToggle := xTxPDO_toggle; // This line must follow the one above. Sequence is important.
+END_IF
+
+// Forwarding BP request for the subsystem
+fbVetoArb.bVeto := i_bVeto;
+fbVetoArb(HigherAuthority:=THIS^, LowerAuthority:=Arbiter, FFO:=fbFFHWO);
+
+//Broadcasting current request
+PMPS_GVL.stRequestedBeamParameters := IO_TO_BP(q_stRequestedBP);
+
+
+q_stRequestedBP.xValid := TRUE; // This is set and held true here every cycle to prove the PLC on this side is still running
+
 // Routed through fbDiag's combined validtion rather than xTxPDO_state alone, which
 // stays 0 (no error) while the local terminal is in PREOP and simply isn't exchanging PDOs.
+// A payload that stays non-finite or out of span is as unusable as a dead link, so its
+// sustained data error joins the same trip.
 ffPMPSIO_Disconnect(
-    i_xOK := NOT bBridgeConfirmedBad,
+    i_xOK := NOT bBridgeConfirmedBad AND NOT fbCurBPTransmission.bError AND NOT fbCurBPPhotonEnergy.bError,
     io_fbFFHWO := fbFFHWO,
     i_xReset := Reset,
     i_DevName := sName,
     i_TypeCode := 6,
     i_xVetoable := FALSE
-    );]]></ST>
+    );
+]]></ST>
     </Implementation>
     <Method Name="CheckRequest" Id="{27cbc3cc-3c51-453f-b2eb-a076b6901ac4}">
       <Declaration><![CDATA[METHOD CheckRequest : BOOL

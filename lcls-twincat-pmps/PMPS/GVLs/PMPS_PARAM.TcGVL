@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <GVL Name="PMPS_PARAM" Id="{a73b5237-920e-4906-b8ec-4aaa7f8c0e45}" ParameterList="True">
     <Declaration><![CDATA[{attribute 'qualified_only'}
@@ -6,6 +6,18 @@ VAR_GLOBAL CONSTANT
     MAX_FAST_FAULTS	:	UINT := 50; // Max fast faults for an FFO
     MAX_ASSERTIONS    :    UDINT := 20; //Maximum number of BP requests in the arbiter
     TRANS_MARGIN : REAL := REAL#0.20; // Allowed % margin above requested transmission level in SafeBPCompare (0.2000 = 20deci% default). Note: change this value if scaling factor changes.
+    ////////////////////////////////////////////////////////////////////////////////////////
+    // Physical spans and qualification times used when sanitizing externally-sourced values
+    // (FB_FallibleRealFromEtherCAT). A value outside its span is rejected and the last
+    // trusted value is held, so these bounds only have to exclude non-physical data.
+    ////////////////////////////////////////////////////////////////////////////////////////
+    MIN_PRESSURE_TORR : REAL := REAL#0.0; // absolute pressure cannot be negative
+    MAX_PRESSURE_TORR : REAL := REAL#1.0E3; // one atmosphere is ~760 Torr; above this is non-physical for these sensors
+    MIN_TRANSMISSION : REAL := REAL#0.0; // nTran is normalized: 1 = full transmission
+    MAX_TRANSMISSION : REAL := REAL#1.0;
+    MIN_PHOTON_ENERGY_EV : REAL := REAL#0.0; // photon energy cannot be negative
+    MAX_PHOTON_ENERGY_EV : REAL := REAL#1.0E5; // LCLS eV range boundary tables stop at 90 keV
+    T_INPUT_INVALID_TIMEOUT : TIME := T#2S; // how long an external value may stay invalid before it is folded into a fault
 END_VAR]]></Declaration>
   </GVL>
 </TcPlcObject>
