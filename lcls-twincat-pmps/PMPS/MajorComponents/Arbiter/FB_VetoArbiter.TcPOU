@@ -16,7 +16,7 @@ VAR
     ffKeepItSecretKeepItSafe : FB_FastFault := (
         i_xAutoReset := TRUE,
         i_Desc := 'Holds beam off until request is back in arbitration',
-        i_TypeCode := 200,
+        i_TypeCode := PMPS_GVL.FF_TYPE_VETO_ARBITER,
         i_xVetoable := TRUE
     );
 
