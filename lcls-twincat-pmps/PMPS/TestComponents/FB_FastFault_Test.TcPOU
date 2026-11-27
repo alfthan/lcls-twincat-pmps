@@ -154,9 +154,11 @@ IF fbTime.bValid AND fbTimePass  THEN
 
     Now := SystemTime_TO_DT(fbTime.systemTime);
     Expire:= fbTime.systemTime;
-    Expire.wSecond:= Expire.wSecond+5;
+    Expire.wSecond:= Expire.wSecond + TO_WORD(PMPS_PARAM.FF_OVRD_EXPIRATION_OFFSET_S);
     specificLocalTimeToFileTime(in := Tc2_Utilities.SYSTEMTIME_TO_FILETIME(Expire), tzInfo := , out => fileTime);
-    Expiration := TO_DINT((SHL(DWORD_TO_ULINT(fileTime.dwHighDateTime), 32) + DWORD_TO_ULINT(fileTime.dwLowDateTime)) / 10000000 - 11644473600);;
+    // Convert the FILETIME value to unix seconds: 100ns ticks since 1601-01-01 -> seconds since 1970-01-01
+    Expiration := TO_DINT((SHL(DWORD_TO_ULINT(fileTime.dwHighDateTime), 32) + DWORD_TO_ULINT(fileTime.dwLowDateTime))
+        / PMPS_PARAM.FILETIME_TICKS_PER_S - PMPS_PARAM.FILETIME_UNIX_EPOCH_OFFSET_S);
 
     WRITE_PROTECTED_DINT(ADR(rFF.Ovrd.Expiration), Expiration );
     WRITE_PROTECTED_TIME(ADR(rFF.Ovrd.Timer.PT), OvrdTime );

@@ -6,6 +6,9 @@ VAR_GLOBAL CONSTANT
     MAX_FAST_FAULTS	:	UINT := 50; // Max fast faults for an FFO
     MAX_ASSERTIONS    :    UDINT := 20; //Maximum number of BP requests in the arbiter
     TRANS_MARGIN : REAL := REAL#0.20; // Allowed % margin above requested transmission level in SafeBPCompare (0.2000 = 20deci% default). Note: change this value if scaling factor changes.
+    FF_OVRD_EXPIRATION_OFFSET_S : DINT := 5; // (s) Fast fault override window: offset ahead of the current time used to seed an override expiration (FB_FastFault_Test). Change this value to change the override window exercised by the test.
+    FILETIME_TICKS_PER_S : ULINT := 10000000; // Number of 100ns FILETIME ticks in one second, used to convert a T_FILETIME value to seconds
+    FILETIME_UNIX_EPOCH_OFFSET_S : ULINT := 11644473600; // (s) Seconds between the FILETIME epoch (1601-01-01) and the Unix epoch (1970-01-01)
 END_VAR]]></Declaration>
   </GVL>
 </TcPlcObject>
