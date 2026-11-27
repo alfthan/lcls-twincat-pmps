@@ -1,17 +1,32 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <POU Name="FB_MachineModeFromEPICS" Id="{e77c5ce7-1295-45e2-913d-511a3f59fc41}" SpecialFunc="None">
-    <Declaration><![CDATA[FUNCTION_BLOCK FB_MachineModeFromEPICS
-(*
-Readback options are:
+    <Declaration><![CDATA[(*
+FB_MachineModeFromEPICS
 
-0 – NC (normal conducting, copper linac)
+Reads the machine-mode PV from the accelerator and publishes it in
+ST_BeamParams.nMachineMode (BP.nMachineMode), raising a fast fault when the
+readback is unusable.
 
-1 – SC (superconducting linac)
+The machine-mode values are declared once in PMPS_PARAM, so every PMPS component
+that consumes nMachineMode (this block, FB_BeamClassFromEPICS,
+FB_BeamClassWatcher, F_SafeBPCompare, F_SafeBPCompare0Rate) shares one
+definition:
 
-2 – Misconfigured (something in link node not set correctly.
+    PMPS_PARAM.MACHINE_MODE_NC            = 0  NC (normal conducting, copper linac)
+    PMPS_PARAM.MACHINE_MODE_SC            = 1  SC (superconducting linac)
+    PMPS_PARAM.MACHINE_MODE_MISCONFIGURED = 2  Misconfigured (something in the link node not set correctly)
+    PMPS_PARAM.MACHINE_MODE_FAILSAFE      = 3  Fail-safe value written when the readback is unusable
 
+NC and SC are the only modes usable for beam: the Misconfigured value is the
+first unusable mode, so a readback at or above it raises the fast fault. When
+the readback itself is not valid, BP.nMachineMode carries MACHINE_MODE_FAILSAFE,
+the fast fault is raised and BP.xValid is cleared.
+
+History:
+2026-11-27  Machine-mode values moved to PMPS_PARAM constants (audit finding 1144).
 *)
+FUNCTION_BLOCK FB_MachineModeFromEPICS
 VAR_IN_OUT
     BP : ST_BeamParams;
     fbMPS_MachineMode : FB_LREALFromEPICS;
@@ -28,9 +43,6 @@ VAR
         i_TypeCode := 16#313,
         i_xAutoReset:=True);
 END_VAR
-VAR CONSTANT
-    cFailSafeMM : USINT := 3;
-END_VAR
 ]]></Declaration>
     <Implementation>
       <ST><![CDATA[fbMPS_MachineMode();
@@ -38,10 +50,11 @@ END_VAR
 IF fbMPS_MachineMode.bValid THEN
     BP.nMachineMode := LREAL_TO_USINT(fbMPS_MachineMode.fValue);
 ELSE
-    BP.nMachineMode := cFailSafeMM;
+    BP.nMachineMode := PMPS_PARAM.MACHINE_MODE_FAILSAFE;
 END_IF
 
-ffModeReadBack(i_xOK:=(fbMPS_MachineMode.bValid) AND fbMPS_MachineMode.fValue <2 , io_fbFFHWO:=FFO);
+// NC and SC are usable for beam; from the Misconfigured value upward the readback is rejected.
+ffModeReadBack(i_xOK:=(fbMPS_MachineMode.bValid) AND fbMPS_MachineMode.fValue < USINT_TO_LREAL(PMPS_PARAM.MACHINE_MODE_MISCONFIGURED) , io_fbFFHWO:=FFO);
 
 BP.xValid R= NOT fbMPS_MachineMode.bValid;]]></ST>
     </Implementation>

@@ -6,6 +6,16 @@ VAR_GLOBAL CONSTANT
     MAX_FAST_FAULTS	:	UINT := 50; // Max fast faults for an FFO
     MAX_ASSERTIONS    :    UDINT := 20; //Maximum number of BP requests in the arbiter
     TRANS_MARGIN : REAL := REAL#0.20; // Allowed % margin above requested transmission level in SafeBPCompare (0.2000 = 20deci% default). Note: change this value if scaling factor changes.
+
+    // Machine modes carried in ST_BeamParams.nMachineMode and read back from the accelerator.
+    // Declared once here because the mode is consumed by several PMPS components
+    // (FB_MachineModeFromEPICS, FB_BeamClassFromEPICS, FB_BeamClassWatcher, F_SafeBPCompare,
+    // F_SafeBPCompare0Rate). Adding or renumbering a mode is a single edit, and the validity
+    // check cannot drift from the fail-safe value written when the readback is unusable.
+    MACHINE_MODE_NC            : USINT := 0; // Normal conducting (copper linac)
+    MACHINE_MODE_SC            : USINT := 1; // Superconducting linac
+    MACHINE_MODE_MISCONFIGURED : USINT := 2; // Something in the link node is not set correctly; not usable for beam
+    MACHINE_MODE_FAILSAFE      : USINT := 3; // Written to BP.nMachineMode when the machine-mode readback is not usable
 END_VAR]]></Declaration>
   </GVL>
 </TcPlcObject>

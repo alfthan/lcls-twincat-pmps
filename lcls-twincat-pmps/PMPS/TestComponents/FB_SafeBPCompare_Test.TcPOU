@@ -43,7 +43,7 @@ stBeamOff_LessConservative:= F_SetBeamParams(
     PMPS_GVL.DUMMY_AUX_ATT_ARRAY); //0 beam rate means this bps is actually safer than BeamOn
 
 // Set Machine Mode to NC
-PMPS_GVL.stCurrentBeamParameters.nMachineMode := 0;
+PMPS_GVL.stCurrentBeamParameters.nMachineMode := PMPS_PARAM.MACHINE_MODE_NC;
 
 TEST('BeamOffIsSafeNC');
 
@@ -88,7 +88,7 @@ stBeamOff_LessConservative:= F_SetBeamParams(
     PMPS_GVL.DUMMY_AUX_ATT_ARRAY); //0 beam rate means this bps is actually safer than BeamOn
 
 // Set Machine Mode to SC
-PMPS_GVL.stCurrentBeamParameters.nMachineMode := 1;
+PMPS_GVL.stCurrentBeamParameters.nMachineMode := PMPS_PARAM.MACHINE_MODE_SC;
 
 TEST('BeamOffIsSafeSC');
 
@@ -115,7 +115,7 @@ TEST_FINISHED();
 
 
 // Set Machine Mode to Misconfigured
-PMPS_GVL.stCurrentBeamParameters.nMachineMode := 2;
+PMPS_GVL.stCurrentBeamParameters.nMachineMode := PMPS_PARAM.MACHINE_MODE_MISCONFIGURED;
 TEST('WrongMachineMode');
 
 AssertFalse(
@@ -144,7 +144,7 @@ VAR
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[// Test in NC mode
-PMPS_GVL.stCurrentBeamParameters.nMachineMode :=0;
+PMPS_GVL.stCurrentBeamParameters.nMachineMode := PMPS_PARAM.MACHINE_MODE_NC;
 
 TEST('BPComparisonTran');
 //Attenuation

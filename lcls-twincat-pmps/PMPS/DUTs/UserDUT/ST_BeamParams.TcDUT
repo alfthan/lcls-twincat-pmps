@@ -40,7 +40,7 @@
         (* Machine Mode *)
         {attribute 'pytmc' := 'pv: MachineMode
             io: i'}
-        nMachineMode: USINT:=3;
+        nMachineMode: USINT := PMPS_PARAM.MACHINE_MODE_FAILSAFE; // Fail-safe until a valid readback is received
         (* Beamline attenuators *)
         {attribute 'pytmc' := 'pv: AuxAtt
         io: i'}

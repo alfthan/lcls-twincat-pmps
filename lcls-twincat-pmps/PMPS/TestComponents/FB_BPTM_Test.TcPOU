@@ -53,7 +53,7 @@ fbSubSysIO(LA := fbArbiter, FFO := ffo);
 fbBPTM_TestBasicFunction.stCurrentBeamParameters := fbSubSysIO.q_stSimulatedBPReadback;
 
 //MG: Need to set the Machine mode testing SC
-PMPS_GVL.stCurrentBeamParameters.nMachineMode :=0;
+PMPS_GVL.stCurrentBeamParameters.nMachineMode := PMPS_PARAM.MACHINE_MODE_NC;
 
 CASE eTestStep OF
 
