@@ -6,6 +6,12 @@ VAR_GLOBAL CONSTANT
     MAX_FAST_FAULTS	:	UINT := 50; // Max fast faults for an FFO
     MAX_ASSERTIONS    :    UDINT := 20; //Maximum number of BP requests in the arbiter
     TRANS_MARGIN : REAL := REAL#0.20; // Allowed % margin above requested transmission level in SafeBPCompare (0.2000 = 20deci% default). Note: change this value if scaling factor changes.
+
+    // Hardware-dependent photon energy span simulated by FB_eVSimulator. Declared once here
+    // so the simulated machine span can be retuned without editing the POU.
+    EV_MIN        : REAL := REAL#0.0;    // Lower bound of the simulated eV span
+    EV_FULL_SCALE : REAL := REAL#1600.0; // Upper, full-scale bound of the simulated eV span
+    EV_NOMINAL    : REAL := REAL#300.0;  // Nominal eV used as the simulated setpoint at power-up
 END_VAR]]></Declaration>
   </GVL>
 </TcPlcObject>

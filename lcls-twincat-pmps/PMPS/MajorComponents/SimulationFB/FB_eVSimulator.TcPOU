@@ -5,38 +5,57 @@
 A. Wallace 2019-8-30
 
 Adds noise to the eV and changes eV position occasionally.
+
+The simulated eV span (lower bound, full-scale range) and the nominal setpoint
+are hardware-dependent scaling values. They are declared once as named constants
+in PMPS_PARAM and exposed here as named parameters, so a caller can retune the
+simulated machine span without editing or recompiling this POU.
+
+History:
+2019-8-30  A. Wallace  Initial version.
+2026-11-27 taio        Replace hard-coded eV nominal/range and LIMIT lower bounds
+                      with the PMPS_PARAM constants exposed as VAR_INPUT parameters.
 *)
 FUNCTION_BLOCK FB_eVSimulator
 VAR_INPUT
     NoiseLevel	:	REAL	:= 0; // eV Noise
-    ChangeTime : TIME := T#10S;
+    ChangeTime : TIME := T#10S; // Interval between occasional eV changes
+    fEVMin     : REAL := PMPS_PARAM.EV_MIN;        // Lower bound of the simulated eV span (eV)
+    fEVMax     : REAL := PMPS_PARAM.EV_FULL_SCALE; // Upper, full-scale bound of the simulated eV span (eV)
+    fEVNominal : REAL := PMPS_PARAM.EV_NOMINAL;    // Nominal eV used to seed the output on the first cycle (eV)
 END_VAR
 VAR_OUTPUT
-    eV	:	REAL := 300;
+    eV	:	REAL; // Simulated photon energy (eV), always within [fEVMin, fEVMax]
 END_VAR
 VAR
-    eVRange : REAL := 1600;
-    timer: TON;
+    timer: TON; // Interval timer for occasional eV changes
     eVRand	:	DRAND :=(Seed:=0);
     NoiseRand : DRAND := (Seed:=0);
+    xSeeded : BOOL; // TRUE once eV has been seeded with the nominal setpoint
 END_VAR
 ]]></Declaration>
     <Implementation>
       <ST><![CDATA[
 timer(in:=TRUE, PT:=ChangeTime);
 
+// Seed the output with the nominal setpoint, clamped to the configured span
+IF NOT xSeeded THEN
+    eV := LIMIT(fEVMin, fEVNominal, fEVMax);
+    xSeeded := TRUE;
+END_IF
+
 //Occasionally change eV
 IF timer.Q THEN
     timer(in:=FALSE);
     eVRand();
-    eV := LIMIT(0, eVRange*LREAL_TO_REAL(eVRand.Num), eVRange);
+    eV := LIMIT(fEVMin, fEVMax*LREAL_TO_REAL(eVRand.Num), fEVMax);
 END_IF
 
 // Noise generation
 NoiseRand();
 eV := eV + NoiseLevel*LREAL_TO_REAL(NoiseRand.Num);
 NoiseRand();
-eV := LIMIT(0, ev - NoiseLevel*LREAL_TO_REAL(NoiseRand.Num), eVRange);]]></ST>
+eV := LIMIT(fEVMin, ev - NoiseLevel*LREAL_TO_REAL(NoiseRand.Num), fEVMax);]]></ST>
     </Implementation>
   </POU>
 </TcPlcObject>
