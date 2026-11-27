@@ -1,9 +1,24 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <POU Name="FB_JsonDocToSafeBP" Id="{be21f50f-6e98-4ce2-92ee-0a1b1ced09d9}" SpecialFunc="None">
-    <Declaration><![CDATA[FUNCTION_BLOCK FB_JsonDocToSafeBP
+    <Declaration><![CDATA[(*
+Loads one device's safe beam parameters out of a PMPS JSON document, tracking the
+state array the caller passes in. Faults are raised through a fast fault output.
+
+Faults are latched: bError stays TRUE (and the fast fault output stays tripped) until
+i_xReset is pulsed. The acknowledge is accepted only while the block is idle (no load
+in progress), and FB_FastFault additionally refuses the reset while the fault condition
+itself is still present.
+
+History:
+2026-11-27 Latched fault rework (audit finding 864): removed the bError clear on the
+           bExecute rising edge, the direct FFO.i_xOK writes and the FFO auto-reset;
+           added the dedicated i_xReset acknowledge input.
+*)
+FUNCTION_BLOCK FB_JsonDocToSafeBP
 VAR_INPUT
     bExecute             : BOOL; //Rising Edge
+    i_xReset             : BOOL; //Dedicated acknowledge/reset: clears a latched error once the block is idle
     jsonDoc 		: SJsonValue;
     sDeviceName : STRING;
 END_VAR
@@ -12,7 +27,7 @@ VAR_OUTPUT
     bHasAllStates		: BOOL;
     bHasAllParameters :BOOL := TRUE;
     bBusy                : BOOL;
-    bError               : BOOL;
+    bError               : BOOL; //Latched: set by any fault, cleared only by i_xReset
     nErrId               : UDINT;
     sErrMsg				 :STRING;
 END_VAR
@@ -33,6 +48,8 @@ VAR
     index: DINT;
     nStateCount:DINT;
     RisingEdge           : R_TRIG;
+    rtReset              : R_TRIG;
+    xErrorLatched        : BOOL; //Latched fault state, bError mirrors this
 
     (*Logger*)
     tNewMessage : R_TRIG;
@@ -46,15 +63,28 @@ END_VAR
 ]]></Declaration>
     <Implementation>
       <ST><![CDATA[(* Retrieve JSON content *)
+// bError is re-derived from the latch every scan, so a new bExecute edge (or a later
+// successful parse) cannot dismiss an unacknowledged fault.
+bError := xErrorLatched;
+
+// Dedicated acknowledge/reset, evaluated before the CASE so a fault raised this scan
+// can never be cleared in the same scan. Safe state for this block is idle: no load in
+// progress and the previous attempt has finished.
+rtReset(CLK := i_xReset);
+IF rtReset.Q AND xErrorLatched AND NOT bBusy AND (Step = 0) THEN
+    xErrorLatched := FALSE;
+    bError := FALSE;
+    nErrId := 0;
+    sErrMsg := '';
+    fbLogger(sMsg:='Parsing Json DOC error acknowledged.', eSevr:=TcEventSeverity.Info);
+END_IF
+
 RisingEdge(CLK:=bExecute);
 
 CASE Step OF
     0:     (* Idle state *)
           IF RisingEdge.Q THEN
                bBusy := TRUE;
-               bError:= FALSE;
-               nErrId:=0;
-               sErrMsg :='';
                Step := 20;
                fbLogger(sMsg:='Start Parsing Json DOC.', eSevr:=TcEventSeverity.Info);
           END_IF
@@ -135,25 +165,34 @@ CASE Step OF
          bExecute:= FALSE;
         bBusy:=FALSE;
         Step := 0;
-        FFO.i_xOK := TRUE;
 END_CASE
 
 
 //Fault in error state
 IF(Step>=900) THEN
-    FFO.i_xOK := FALSE;
     bBusy:=FALSE;
     Step:=0;
 END_IF
+
+// Latch every fault raised this scan (error states, M_LoadSafeBP, ...). Only the
+// acknowledge path above clears it; nothing in this block clears it implicitly.
+IF bError THEN
+    xErrorLatched := TRUE;
+END_IF
+bError := xErrorLatched;
+
 ACT_FFO();
 ACT_LOGGER();]]></ST>
     </Implementation>
     <Action Name="ACT_FFO" Id="{6e9a2bc2-3984-4ee7-a4d8-2cc5196ce941}">
       <Implementation>
         <ST><![CDATA[(*FAST FAULT*)
-FFO(i_xOK := ,
-    i_xReset := ,
-    i_xAutoReset :=TRUE,
+// i_xOK mirrors the latched fault state and i_xAutoReset is FALSE, so the fast fault is
+// held until i_xReset is applied with the fault condition clear: FB_FastFault refuses a
+// reset while i_xOK is false.
+FFO(i_xOK := NOT xErrorLatched,
+    i_xReset := i_xReset,
+    i_xAutoReset := FALSE,
     i_DevName := sDeviceName,
     io_fbFFHWO := io_fbFFHWO);]]></ST>
       </Implementation>

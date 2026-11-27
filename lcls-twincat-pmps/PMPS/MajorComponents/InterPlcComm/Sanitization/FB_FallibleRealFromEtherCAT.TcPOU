@@ -7,12 +7,21 @@
    and passes both in each cycle; this FB owns no hardware links. It holds the last trusted value while
    the input reads NaN/Inf or the bridge is down. Error reports only the locally-detected sustained
    non-finite condition; fault on bad comms via the bridge FB's bBridgeConfirmedBad in the caller.
-   Value widens to LREAL for I_FallibleLreal consumers. *)
+   Value widens to LREAL for I_FallibleLreal consumers.
+
+   bError is latched: once the sustained non-finite condition is confirmed it stays set until
+   i_xReset is applied while the input is trusted again (finite and bridge healthy), so a bounded
+   excursion cannot be dismissed just because the raw value reads finite again.
+
+   History:
+   2026-11-27 Latched fault rework (audit finding 1140): bError no longer follows the timeout's Q
+              directly; added the dedicated i_xReset acknowledge input. *)
 FUNCTION_BLOCK FB_FallibleRealFromEtherCAT
 IMPLEMENTS I_FallibleLreal
 VAR_INPUT
     i_bBridgeOk : BOOL;
     i_fValue : REAL;
+    i_xReset : BOOL; //Dedicated acknowledge/reset for the latched bError; honored only in a trusted state
     sName : STRING := 'FallibleReal';
 END_VAR
 VAR_OUTPUT
@@ -31,7 +40,7 @@ VAR_OUTPUT
         pv: Error
         io: i
     '}
-    bError : BOOL;
+    bError : BOOL; //Latched: cleared only by i_xReset
 END_VAR
 VAR
     tHeartbeatExpirationTime : TIME;
@@ -46,6 +55,8 @@ VAR
     bOverride : BOOL;
     bOverrideError : BOOL;
     fOverrideValue : REAL;
+
+    bErrorLatched : BOOL; //Latched error state, bError mirrors this
 END_VAR
 ]]></Declaration>
     <Implementation>
@@ -62,9 +73,17 @@ fValue := SEL(bOverride, SEL(bInputNotFinite OR NOT i_bBridgeOk, i_fValue, fLast
 rtNonFiniteConfirmed(CLK := tonNonFiniteInputTimeout.Q);
 IF rtNonFiniteConfirmed.Q THEN
     fbLog(sMsg := CONCAT(sName, ': input value not finite (NaN/Inf) for longer than timeout'));
+    bErrorLatched := TRUE; //Latched: a bounded excursion stays reported until acknowledged
 END_IF
 
-bError :=SEL(bOverride, THIS^.tonNonFiniteInputTimeout.Q, bOverrideError);]]></ST>
+// Dedicated acknowledge/reset. Only honored from a trusted state: the bridge reports healthy
+// and the input reads finite again. Until then the fault stays latched, so an excursion that
+// recovers between two EPICS scans is not lost.
+IF i_xReset AND bErrorLatched AND i_bBridgeOk AND NOT bInputNotFinite THEN
+    bErrorLatched := FALSE;
+END_IF
+
+bError :=SEL(bOverride, bErrorLatched, bOverrideError);]]></ST>
     </Implementation>
     <Property Name="Error" Id="{923f5a6d-36ca-4c5b-a726-b6b176323b9c}">
       <Declaration><![CDATA[PROPERTY Error : BOOL

@@ -1,7 +1,20 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <POU Name="FB_PressSensor_FFO" Id="{09ab3883-be1e-4684-be4b-0a2f4c088ff5}" SpecialFunc="None">
-    <Declaration><![CDATA[FUNCTION_BLOCK FB_PressSensor_FFO
+    <Declaration><![CDATA[(*
+Reports a pressure threshold fault as a fast fault.
+
+The fault is latched inside FB_FastFault: i_xAutoReset is off by default, so the fault stays
+asserted until i_xReset is pulsed and the pressure has been released below the hysteresis
+band (FB_FastFault refuses a reset while i_xOK is false, i.e. from anything but a known-safe
+state).
+
+History:
+2026-11-27 Latched fault rework (same convention finding as FB_TempSensor_FFO, 1132):
+           bAutoReset now defaults FALSE and the dedicated i_xReset input is wired to the fast
+           fault (it was left unconnected).
+*)
+FUNCTION_BLOCK FB_PressSensor_FFO
 VAR_INPUT
     {attribute 'pytmc' := '
         pv: Press
@@ -26,7 +39,8 @@ VAR_INPUT
     fHysteresis : LREAL :=1; // percentage determining how far below the trigger value the fault should be released
     sDevName: STRING;
     bVeto : BOOL:=FALSE; // This Fault will be will not trip the beam if the bVeto is TRUE
-    bAutoReset : BOOL:=TRUE;
+    i_xReset : BOOL; // Dedicated acknowledge/reset for the latched fault, honored only once the condition has cleared
+    bAutoReset : BOOL:=FALSE; // Latched by default: the fault clears only through i_xReset
 END_VAR
 VAR_IN_OUT
     io_fbFFHWO    :    FB_HardwareFFOutput;
@@ -63,8 +77,10 @@ END_IF
 ACT_Logger();
 
 (*FAST FAULT*)
+// The fault is latched by FB_FastFault (i_xAutoReset FALSE by default) and cleared only by
+// i_xReset, which FB_FastFault ignores while i_xOK is false (pressure not released).
 FFO(i_xOK := bFAULT_OK OR bVeto,
-    i_xReset :=,
+    i_xReset := i_xReset,
     i_xAutoReset := bAutoReset,
     i_DevName := sDevName,
     io_fbFFHWO := io_fbFFHWO);]]></ST>

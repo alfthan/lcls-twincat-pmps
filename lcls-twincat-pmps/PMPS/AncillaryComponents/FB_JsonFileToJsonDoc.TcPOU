@@ -1,9 +1,23 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <POU Name="FB_JsonFileToJsonDoc" Id="{b6fe30de-ce9d-4faa-a7ae-6e28ef395974}" SpecialFunc="None">
-    <Declaration><![CDATA[FUNCTION_BLOCK FB_JsonFileToJsonDoc
+    <Declaration><![CDATA[(*
+Reads a PMPS JSON file from the PLC file system and publishes the document for one PLC.
+
+Faults (file open/read/close, parse, missing PLC name) are latched: bError stays TRUE
+(and the fast fault output stays tripped) until i_xReset is pulsed. The acknowledge is
+accepted only while the block is idle (no read in progress), and FB_FastFault refuses it
+while the fault condition itself is still present.
+
+History:
+2026-11-27 Latched fault rework (audit finding 1120): removed the bError/nErrId clear on
+           the bExecute rising edge, the direct FFO.i_xOK writes and the FFO auto-reset;
+           added the dedicated i_xReset acknowledge input.
+*)
+FUNCTION_BLOCK FB_JsonFileToJsonDoc
 VAR_INPUT
     bExecute             : BOOL; //Rising Edge
+    i_xReset             : BOOL; //Dedicated acknowledge/reset: clears a latched error once the block is idle
     sPLCName			 : STRING;
     sSrcNetId            : T_AmsNetId;
     sSrcPathName         : T_MaxString;
@@ -12,7 +26,7 @@ VAR_OUTPUT
     PMPS_jsonDoc 		: SJsonValue;
     bHasPLC              : BOOL;
     bBusy                : BOOL;
-    bError               : BOOL;
+    bError               : BOOL; //Latched: set by any fault, cleared only by i_xReset
     nErrId               : UDINT;
     sErrMsg				 :STRING;
 END_VAR
@@ -36,6 +50,8 @@ VAR
     Step: INT;
     index: DINT;
     RisingEdge           : R_TRIG;
+    rtReset              : R_TRIG;
+    xErrorLatched        : BOOL; //Latched fault state, bError mirrors this
     (* Buffer *)
     sbuffRead			:STRING(100000);
     cbReadLength         : UDINT := 0;
@@ -61,13 +77,27 @@ END_IF
 fb_GetLocalAmsNetId(bExecute:=);
 
 (* Retrieve JSON content *)
+// bError is re-derived from the latch every scan, so a new bExecute edge (or a later
+// successful read) cannot dismiss an unacknowledged fault.
+bError := xErrorLatched;
+
+// Dedicated acknowledge/reset, evaluated before the CASE so a fault raised this scan
+// can never be cleared in the same scan. Safe state for this block is idle: no read in
+// progress and the previous attempt has finished.
+rtReset(CLK := i_xReset);
+IF rtReset.Q AND xErrorLatched AND NOT bBusy AND (Step = 0) THEN
+    xErrorLatched := FALSE;
+    bError := FALSE;
+    nErrId := 0;
+    sErrMsg := '';
+    fbLogger(sMsg:='Json file read error acknowledged.', eSevr:=TcEventSeverity.Info);
+END_IF
+
 RisingEdge(CLK:=bExecute);
 CASE Step OF
     0:     (* Idle state *)
           IF RisingEdge.Q THEN
                bBusy := TRUE;
-               bError:= FALSE;
-               nErrId:=0;
                Step := 1;
                cbReadLength:=0;
                hSrcFile:=0;
@@ -79,7 +109,6 @@ CASE Step OF
                FOR index:=1  TO 100000 DO
                   sbuffRead[index]:=0;   //clear buffer
                END_FOR
-               sErrMsg:='';
                nFileLength:=0;
                jsonDoc := fbJson.ParseDocument(sbuffRead);
 
@@ -212,17 +241,23 @@ CASE Step OF
         //jsonDoc := fbJson.NewDocument();
         bExecute:= FALSE;
         bBusy:=FALSE;
-        FFO.i_xOK := TRUE;
         Step := 0;
 
 END_CASE
 
 //Fault in error state
 IF(Step>=900) THEN
-    FFO.i_xOK := FALSE;
     bBusy:=FALSE;
     Step:=0;
 END_IF
+
+// Latch every fault raised this scan (error states, ...). Only the acknowledge path
+// above clears it; nothing in this block clears it implicitly.
+IF bError THEN
+    xErrorLatched := TRUE;
+END_IF
+bError := xErrorLatched;
+
 ACT_FFO();
 ACT_LOGGER();
 
@@ -233,9 +268,12 @@ ACT_LOGGER();
     <Action Name="ACT_FFO" Id="{70e6c5ae-a63f-4266-a980-0f09ad9c8731}">
       <Implementation>
         <ST><![CDATA[(*FAST FAULT*)
-FFO(i_xOK := ,
-    i_xReset := ,
-    i_xAutoReset :=TRUE,
+// i_xOK mirrors the latched fault state and i_xAutoReset is FALSE, so the fast fault is
+// held until i_xReset is applied with the fault condition clear: FB_FastFault refuses a
+// reset while i_xOK is false.
+FFO(i_xOK := NOT xErrorLatched,
+    i_xReset := i_xReset,
+    i_xAutoReset := FALSE,
     i_DevName := sPLCName,
     io_fbFFHWO := io_fbFFHWO);]]></ST>
       </Implementation>
