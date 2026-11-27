@@ -18,7 +18,8 @@ END_VAR
     <Implementation>
       <ST><![CDATA[FFCombinedFunctionality();
 FFRegistration();
-FFOvrdAndNextFault();]]></ST>
+FFOvrdAndNextFault();
+FFVetoableSafeDefault();]]></ST>
     </Implementation>
     <Method Name="FFCombinedFunctionality" Id="{a87e81fa-eb2b-44b4-80d9-4461fa087530}">
       <Declaration><![CDATA[METHOD FFCombinedFunctionality
@@ -215,6 +216,82 @@ AssertEquals_STRING(fbFF.sPath, fbFFO.astFF[fbFF.RegistrationIdx].Info.sPath,
     'FF registration with FFO did not succeed');
 
 TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="FFVetoableSafeDefault" Id="{d6fbff92-1630-4408-9781-ab49fbd74717}">
+      <Declaration><![CDATA[{attribute 'no_check'}
+METHOD FFVetoableSafeDefault
+VAR_INPUT
+END_VAR
+VAR_INST
+    // Defaults only: the permit must start in its safe (non-vetoable) state
+    fbFFSafe    :    FB_FastFault;
+    fbFFOSafe    :    FB_HardwareFFOutput;
+
+    // Explicit opt-in: this fault may be masked by the FFO veto device
+    fbFFVeto    :    FB_FastFault := (
+        i_xVetoable := TRUE);
+    fbFFOVeto    :    FB_HardwareFFOutput;
+
+    nStep : UINT; // Test step counter, one step per PLC cycle
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('FFVetoableSafeDefault');
+
+// Two fast faults on two FFOs: one takes the defaults, one opts in to veto masking.
+// The FFO veto input may only mask the fault that opted in.
+CASE nStep OF
+0:
+    // Arm both fast faults into a permitted state so the next step can prove that
+    // the fast fault output really drops when the fault is induced.
+    fbFFSafe(io_fbFFHWO := fbFFOSafe, i_xOK := TRUE, i_xReset := TRUE);
+    fbFFVeto(io_fbFFHWO := fbFFOVeto, i_xOK := TRUE, i_xReset := TRUE);
+
+    // The permit must start FALSE everywhere it is exposed
+    AssertFalse(fbFFSafe.i_xVetoable,
+        'FB_FastFault.i_xVetoable must default FALSE: masking has to be an explicit opt-in');
+    AssertFalse(fbFFOSafe.astFF[fbFFSafe.RegistrationIdx].Info.Vetoable,
+        'ST_FFInfo.Vetoable must default FALSE: masking has to be an explicit opt-in');
+    AssertTrue(fbFFOVeto.astFF[fbFFVeto.RegistrationIdx].Info.Vetoable,
+        'Explicit i_xVetoable := TRUE was not registered in ST_FFInfo');
+
+    fbFFOSafe.i_xReset := TRUE;
+    fbFFOSafe.ExecuteNoLog();
+    fbFFOVeto.i_xReset := TRUE;
+    fbFFOVeto.ExecuteNoLog();
+
+    AssertTrue(fbFFOSafe.q_xFastFaultOut,
+        'Setup: non-vetoable FFO did not permit beam');
+    AssertTrue(fbFFOVeto.q_xFastFaultOut,
+        'Setup: vetoable FFO did not permit beam');
+
+    nStep := 1;
+
+1:
+    // Fault both fast faults while the FFO veto is asserted
+    fbFFOSafe.i_xReset := FALSE;
+    fbFFOSafe.i_xVeto := TRUE;
+    fbFFSafe(io_fbFFHWO := fbFFOSafe, i_xOK := FALSE);
+    fbFFOSafe.ExecuteNoLog();
+
+    AssertFalse(fbFFOSafe.q_xFastFaultOut,
+        'FFO veto masked a fast fault that never opted in to masking');
+
+    fbFFOVeto.i_xReset := FALSE;
+    fbFFOVeto.i_xVeto := TRUE;
+    fbFFVeto(io_fbFFHWO := fbFFOVeto, i_xOK := FALSE);
+    fbFFOVeto.ExecuteNoLog();
+
+    AssertTrue(fbFFOVeto.q_xFastFaultOut,
+        'Explicitly vetoable fast fault was not masked by the FFO veto');
+
+    TEST_FINISHED();
+    nStep := 2;
+
+ELSE
+    nStep := 2; // Test is finished, nothing left to do
+END_CASE]]></ST>
       </Implementation>
     </Method>
   </POU>

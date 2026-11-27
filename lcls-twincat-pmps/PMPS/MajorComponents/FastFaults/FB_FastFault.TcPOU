@@ -10,6 +10,10 @@ function block to contribute to the state of the fast fault output (FFO).
 If the i_xOK goes false, the associated FFO will go false, despite the state of any other
 contributing fast faults, unless the FFO is currently vetoed.
 
+Masking behind the FFO veto device (i_xVeto) is an explicit opt-in: i_xVetoable
+starts FALSE, so a fast fault trips beam even while the veto input is asserted
+unless the instance sets i_xVetoable := TRUE. Vetoable is latched at first scan.
+
 *)
 {attribute 'reflection'}
 FUNCTION_BLOCK FB_FastFault
@@ -18,7 +22,7 @@ VAR_INPUT
     i_xOK        :    BOOL; // Connect to fast-fault condition (false produces fault)
     i_xReset    :    BOOL; // Resets when i_xOK is true and this is true
     i_xAutoReset : BOOL := FALSE; // Automatically clear fast fault (latching vs non-latching)
-    i_xVetoable : BOOL := TRUE; // Mask this fast fault if the FFO veto device is true
+    i_xVetoable : BOOL := FALSE; // Opt-in: set TRUE to let the FFO veto device mask this fast fault
 
     i_DevName : T_MaxString := ''; // Device name for diagnostic
     i_Desc : T_MaxString := ''; // Description of fast fault (you should set at init)

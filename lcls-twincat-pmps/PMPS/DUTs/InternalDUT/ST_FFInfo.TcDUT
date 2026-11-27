@@ -40,7 +40,14 @@ STRUCT
 
 
     AutoReset   :   BOOL; // Automatically clear fast fault (latching vs non-latching)
-    Vetoable  : BOOL := TRUE; // Can this fast fault be masked by the veto device input?
+
+///////////////////////////////////////////
+// Safety: this permit starts FALSE (safe). Letting the external veto device mask
+// this fast fault is an explicit opt-in - set i_xVetoable := TRUE on the
+// FB_FastFault instance that contributes the fault. A fast fault that has not
+// opted in trips beam even while the FFO veto input is asserted.
+///////////////////////////////////////////
+    Vetoable  : BOOL := FALSE; // Can this fast fault be masked by the veto device input? Explicit opt-in per instance.
 
       {attribute 'pytmc' := '
         pv: InfoString
