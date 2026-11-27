@@ -49,6 +49,7 @@ VAR_GLOBAL CONSTANT
     VISIBLE_TEST_VELOCITY    :    LREAL    := 10;
     FAST_TEST_VELOCITY        :    LREAL    := 100;
     MAX_DEVICE_STATES        :    UDINT    := 300;
+    MAX_JSON_FILE_LEN        :    UDINT    := 100000; // Maximum JSON file size (characters) read into the buffer of FB_JsonFileToJsonDoc
 
     TRANS_SCALING_FACTOR : REAL := REAL#1.0; // Scaling factor for fixed-point transmission
 

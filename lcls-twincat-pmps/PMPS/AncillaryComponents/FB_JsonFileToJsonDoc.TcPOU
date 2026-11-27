@@ -34,10 +34,10 @@ VAR
     fbFileRead           : FB_FileRead;
     hSrcFile             : UINT := 0;(* File handle of the source file *)
     Step: INT;
-    index: DINT;
+    index: UDINT;
     RisingEdge           : R_TRIG;
     (* Buffer *)
-    sbuffRead			:STRING(100000);
+    sbuffRead			:STRING(PMPS_GVL.MAX_JSON_FILE_LEN); //Read buffer, holds the whole JSON file
     cbReadLength         : UDINT := 0;
     nFileLength	 : UDINT := 0;
     bfbJsonExceptionRaised: BOOL;
@@ -76,7 +76,7 @@ CASE Step OF
                PMPS_jsonDoc := 0;
                jsonDoc:=0;
                jsonProp:=0;
-               FOR index:=1  TO 100000 DO
+               FOR index:=1  TO PMPS_GVL.MAX_JSON_FILE_LEN DO
                   sbuffRead[index]:=0;   //clear buffer
                END_FOR
                sErrMsg:='';
