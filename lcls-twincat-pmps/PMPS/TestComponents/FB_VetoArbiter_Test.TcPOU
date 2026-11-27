@@ -32,8 +32,6 @@ VAR_INST
 
     fbHigherArb : FB_Arbiter(2);
 
-    ArbBP : ST_BeamParams:=(nTran:=1);
-
     VetoArb : FB_VetoArbiter;
 
     FFO : FB_HardwareFFOutput;
@@ -115,7 +113,8 @@ VetoArb(HigherAuthority:=fbHigherArb, // Veto removed
     LowerAuthority:=fbArbiter,
     FFO:=FFO);
 
-AssertTrue(ArbBP.nTran = PMPS_GVL.cstFullBeam.nTran, 'Veto device remained in, trans should still be 100');
+AssertTrue(fbHigherArb.q_stBeamParams.nTran = PMPS_GVL.cstFullBeam.nTran, 'Veto device remained in, trans should still be full beam');
+AssertFalse(F_DifferentBeamParams(fbHigherArb.q_stBeamParams, PMPS_GVL.cstFullBeam), 'Adding a 2nd request should have no effect on the final arbitrated beam parameter set');
 AssertTrue(fbArbiter.CheckRequest(nId), 'Request should still be considered valid (2)');
 AssertTrue(fbArbiter.CheckRequest(nId2), '2nd Request should be considered valid');
 
