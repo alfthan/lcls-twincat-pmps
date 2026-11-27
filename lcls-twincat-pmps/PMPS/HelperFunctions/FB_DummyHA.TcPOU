@@ -1,9 +1,78 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <POU Name="FB_DummyHA" Id="{670c3d93-34b2-4592-94f3-5ed3a0dba153}" SpecialFunc="None">
-    <Declaration><![CDATA[FUNCTION_BLOCK FB_DummyHA IMPLEMENTS I_HigherAuthority, I_LowerAuthority
+    <Declaration><![CDATA[(*
+    FB_DummyHA : stand-in higher authority that acknowledges every arbitration
+    request, so an arbiter chain can end somewhere.
+
+    Purpose:
+        Terminate an arbiter chain where no real higher authority exists - bench
+        setups, unit tests, and subsystems that are not (yet) part of a
+        site-wide arbitration tree. FB_Arbiter and FB_VetoArbiter push their
+        arbitrated beam-parameter set one level up with
+        ElevateRequest(HigherAuthority); when they are handed FB_DummyHA that
+        call is accepted and discarded, so the chain ends here instead of on a
+        dangling interface reference. The three I_HigherAuthority methods then
+        answer "fine with it": RequestBP and RemoveRequest always succeed, and
+        CheckRequest reports the request as included.
+
+    Usage:
+        Declare one instance and hand it to the block whose chain should end:
+
+            fbDummyHA : FB_DummyHA;
+            fbArbiter.ElevateRequest(fbDummyHA);
+
+        Every request is acknowledged by default (ReqAcknowledged = TRUE). To
+        exercise the case where the higher authority is not including the
+        request, drive ReqAcknowledged FALSE: the DoS test in FB_Arbiter_Test
+        does exactly that, and FB_VetoArbiter uses
+        HigherAuthority.CheckRequest(LowerAuthority.nLowerAuthorityID) to hold
+        its beam-off fast fault while the request is unacknowledged.
+        The block keeps no state and no request table: RequestBP and
+        RemoveRequest ignore their arguments and touch no beam parameters, so
+        acknowledging a request here never changes what is arbitrated below.
+        As an I_LowerAuthority it reports PMPS_GVL.EXCLUDED_ASSERTION_ID as its
+        nLowerAuthorityID (an ID no real assertion can have) and its
+        bLowerAuthorityVetoed is unimplemented - do not put it below an
+        FB_VetoArbiter and expect a veto to be reported back.
+
+    Objectives:
+        - Let an arbiter or veto arbiter run with nothing configured above it,
+          without a NULL interface reference.
+        - Give tests a deterministic, controllable "upstream accepted my
+          request" signal (ReqAcknowledged) instead of a mocked authority.
+        - Stay transparent: never filter, delay or alter the requests it is
+          handed, so the lower authority arbitrates exactly what was set up.
+
+    History:
+        2020-08-12  Alex Wallace     : Created - dummy higher authority plus the
+                                       veto block for arbiters; CheckRequest
+                                       returned TRUE unconditionally.
+        2020-08-17  Alex Wallace     : Veto arbiter work - RemoveRequest and
+                                       RequestBP given their TRUE returns
+                                       instead of being empty stubs.
+        2020-11-18  Alex Wallace     : DoS fix - ReqAcknowledged added and
+                                       CheckRequest now returns it, so the
+                                       acknowledgement can be withheld.
+        2024-01-29  ghalym           : Reformatted by pre-commit.
+        2025-03-01  Kaushik Malapati : bLowerAuthorityVetoed property added (PV
+                                       for when the arbiter is vetoed).
+        2025-06-13  Kaushik Malapati : Property-implementation warnings removed;
+                                       property IDs regenerated.
+        2026-09-16  Yann S. Mandza   : XAE product version removed from the
+                                       object header.
+        2026-11-27  Scirix agent     : This header and the declaration/method
+                                       comments added; no functional change
+                                       (audit finding #251, convention
+                                       conv_321640e095c0).
+*)
+FUNCTION_BLOCK FB_DummyHA IMPLEMENTS I_HigherAuthority, I_LowerAuthority
 VAR_INPUT
-    ReqAcknowledged : BOOL := TRUE; // Use to control when the HA CHeckRequest Returns TRUE
+    // Answer this block returns from CheckRequest: TRUE = "the request is
+    // included upstream", FALSE = withhold the acknowledgement (simulates a
+    // higher authority that has not accepted the request yet). Default TRUE so
+    // the dummy is transparent unless a test drives it FALSE.
+    ReqAcknowledged : BOOL := TRUE;
 END_VAR
 VAR_OUTPUT
 END_VAR
@@ -14,7 +83,14 @@ END_VAR
       <ST><![CDATA[]]></ST>
     </Implementation>
     <Property Name="bLowerAuthorityVetoed" Id="{dc69a883-ba74-4f2e-a93f-7cebcc989749}">
-      <Declaration><![CDATA[PROPERTY bLowerAuthorityVetoed : BOOL
+      <Declaration><![CDATA[// I_LowerAuthority: has the authority below been vetoed? FB_VetoArbiter
+// writes this on its LowerAuthority and expects the lower arbiter to act on
+// it.
+// On the dummy it is deliberately unimplemented: the getter body is empty
+// (a read yields FALSE) and the setter discards the value, so a veto written
+// here is never reported back or acted upon. The dummy is a chain terminator
+// for tests, not a place to veto.
+PROPERTY bLowerAuthorityVetoed : BOOL
 ]]></Declaration>
       <Get Name="Get" Id="{bf22549d-3b93-41ea-ba39-a97d1feb55bb}">
         <Declaration><![CDATA[VAR
@@ -34,7 +110,15 @@ END_VAR
       </Set>
     </Property>
     <Method Name="CheckRequest" Id="{6032c3d9-45c7-4cc0-b102-000af7719efd}">
-      <Declaration><![CDATA[METHOD CheckRequest : BOOL
+      <Declaration><![CDATA[// I_HigherAuthority: report whether this authority is including request
+// nReqID. The dummy keeps no request table, so every ID gets the same
+// answer: ReqAcknowledged.
+// nReqID : arbiter request / assertion ID to look up - caller-owned, unique
+//          per device + state, normally the arbiter's nLowerAuthorityID.
+//          Ignored: never stored and never validated (0 and
+//          PMPS_GVL.EXCLUDED_ASSERTION_ID are answered like any other ID).
+//          Units: none (identifier).
+METHOD CheckRequest : BOOL
 VAR_INPUT
     nReqID	: DWORD;
 END_VAR
@@ -48,6 +132,13 @@ END_VAR
 // Elevates the arbitrated BP set to something above.
 // Could be another arbiter, or a BP requester/ IO,
 // or an FB that locks in a specific portion of the BP set.
+// Here the "something above" does not exist: the dummy is the top of the
+// chain, so the call is accepted and nothing is elevated or returned.
+// HigherAuthority : the next authority up, as seen by the calling lower
+//                   authority. Unused - the dummy has nothing above it; the
+//                   parameter only satisfies the I_LowerAuthority signature
+//                   so any I_HigherAuthority can be passed in. The BOOL
+//                   result is never written, so callers must not rely on it.
 METHOD ElevateRequest : BOOL
 VAR_INPUT
     HigherAuthority : I_HigherAuthority;
@@ -58,7 +149,13 @@ END_VAR
       </Implementation>
     </Method>
     <Property Name="nLowerAuthorityID" Id="{32132f8f-263b-4eb5-946b-8283dbd45b0c}">
-      <Declaration><![CDATA[PROPERTY nLowerAuthorityID : DWORD]]></Declaration>
+      <Declaration><![CDATA[// I_LowerAuthority: the ID under which this authority's own requests appear
+// in the higher authority's assertion pool; FB_VetoArbiter re-requests
+// HigherAuthority with it when the veto changes.
+// The dummy registers nothing anywhere, so the getter reports
+// PMPS_GVL.EXCLUDED_ASSERTION_ID (16#FFFFFFFF) - the reserved "never
+// matches" ID - rather than a plausible number. Units: none (identifier).
+PROPERTY nLowerAuthorityID : DWORD]]></Declaration>
       <Get Name="Get" Id="{e7806d6e-95f6-4d6c-bc9b-d36d07b4562a}">
         <Declaration><![CDATA[VAR
 END_VAR
@@ -70,6 +167,11 @@ END_VAR
     </Property>
     <Method Name="RemoveRequest" Id="{8cc18e1a-c7b1-4978-8d42-4efdc8839d77}">
       <Declaration><![CDATA[
+// I_HigherAuthority: remove request nReqID from this authority's
+// arbitration. The dummy has no request table, so there is nothing to
+// remove; it reports success so the caller's bookkeeping can proceed.
+// nReqID : arbiter request / assertion ID to remove - caller-owned, unique
+//          per device + state. Ignored. Units: none (identifier).
 METHOD RemoveRequest : BOOL
 VAR_INPUT
     (*StateID to remove*)
@@ -82,6 +184,13 @@ END_VAR
     </Method>
     <Method Name="RequestBP" Id="{55d2a094-bf30-435f-a214-786bf412cbdf}">
       <Declaration><![CDATA[
+// I_HigherAuthority: place beam-parameter request stReqBP with this
+// authority under nReqID. The dummy only acknowledges: the set is not
+// evaluated, merged, converted or stored, and no beam parameters change.
+// nReqID  : arbiter request / assertion ID the caller registers the set
+//           under - caller-owned, unique per device + state. Ignored.
+// stReqBP : requested beam parameters (transmission, rate, eV/BC ranges,
+//           apertures). Ignored.
 METHOD RequestBP : BOOL
 VAR_INPUT
     (*StateID of state requesting beam parameter set*)
