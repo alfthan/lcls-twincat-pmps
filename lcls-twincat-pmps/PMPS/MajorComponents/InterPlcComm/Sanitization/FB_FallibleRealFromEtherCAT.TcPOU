@@ -7,7 +7,18 @@
    and passes both in each cycle; this FB owns no hardware links. It holds the last trusted value while
    the input reads NaN/Inf or the bridge is down. Error reports only the locally-detected sustained
    non-finite condition; fault on bad comms via the bridge FB's bBridgeConfirmedBad in the caller.
-   Value widens to LREAL for I_FallibleLreal consumers. *)
+   Value widens to LREAL for I_FallibleLreal consumers.
+
+   The manual override of the sanitized value (bOverride) is permission-qualified and
+   self-clearing: it is honoured only after the bridge has been healthy for
+   PMPS_PARAM.OVRD_QUALIFICATION_TIME, it holds only while the bridge stays healthy, and
+   it clears itself after PMPS_PARAM.OVRD_MAX_DURATION. An override substitutes the
+   value only - bError always reports the sanitizer's own fault state, so an override
+   can never hide an invalid input.
+
+   2026-11-27 Scirix Agent: replaced the unqualified bOverride/bypass with a qualified,
+   self-clearing override and made bError independent of it.
+   *)
 FUNCTION_BLOCK FB_FallibleRealFromEtherCAT
 IMPLEMENTS I_FallibleLreal
 VAR_INPUT
@@ -43,9 +54,19 @@ VAR
         eSubsystem := E_Subsystem.MPS
     );
 
-    bOverride : BOOL;
-    bOverrideError : BOOL;
-    fOverrideValue : REAL;
+    // Manual override of the sanitized value. Nothing requests it today; when a caller
+    // does, it is honoured only once the bridge has been healthy for the qualification
+    // time, holds only while the bridge stays healthy, and clears itself after the
+    // maximum duration.
+    bOverride : BOOL; // Override request
+    fOverrideValue : REAL; // Value substituted while the override is in force
+    tonOverrideQualify : TON; // Qualifies the permission before the override is honoured
+    tonOverrideDuration : TON; // Maximum override duration; on expiry the override clears
+    ftOverrideRequest : F_TRIG; // Releasing the request re-arms it for a fresh override
+    xOverrideActive : BOOL; // Override is in force this cycle
+    xOverrideExpired : BOOL; // Latched when the maximum duration cleared the override
+    rtOverrideActive : R_TRIG; // Logs the override becoming active
+    ftOverrideActive : F_TRIG; // Logs the override being released
 END_VAR
 ]]></Declaration>
     <Implementation>
@@ -57,14 +78,52 @@ IF i_bBridgeOk AND NOT bInputNotFinite THEN
     fLastValidValue := i_fValue;
 END_IF
 
-fValue := SEL(bOverride, SEL(bInputNotFinite OR NOT i_bBridgeOk, i_fValue, fLastValidValue), fOverrideValue);
+// Manual override (see the declaration for the contract): permission-qualified,
+// self-clearing after a maximum duration, and dropped as soon as the permission goes.
+tonOverrideQualify(IN := bOverride AND i_bBridgeOk, PT := PMPS_PARAM.OVRD_QUALIFICATION_TIME);
+
+IF tonOverrideQualify.Q AND NOT xOverrideExpired THEN
+    xOverrideActive := TRUE;
+END_IF
+
+// The override clears itself after the maximum duration and stays cleared until the
+// request is released and issued again, so holding the request cannot keep it on.
+tonOverrideDuration(IN := xOverrideActive, PT := PMPS_PARAM.OVRD_MAX_DURATION);
+IF tonOverrideDuration.Q THEN
+    xOverrideActive := FALSE;
+    xOverrideExpired := TRUE;
+END_IF
+
+// A released request or a lost bridge link ends the override immediately.
+ftOverrideRequest(CLK := bOverride);
+IF NOT bOverride OR NOT i_bBridgeOk THEN
+    xOverrideActive := FALSE;
+END_IF
+IF ftOverrideRequest.Q THEN
+    xOverrideExpired := FALSE;
+END_IF
+
+// Log the override transitions, not every cycle they are held.
+rtOverrideActive(CLK := xOverrideActive);
+IF rtOverrideActive.Q THEN
+    fbLog(sMsg := CONCAT(sName, ': manual override active'), eSevr := TcEventSeverity.Warning);
+END_IF
+
+ftOverrideActive(CLK := xOverrideActive);
+IF ftOverrideActive.Q THEN
+    fbLog(sMsg := CONCAT(sName, ': manual override released'), eSevr := TcEventSeverity.Warning);
+END_IF
+
+fValue := SEL(xOverrideActive, SEL(bInputNotFinite OR NOT i_bBridgeOk, i_fValue, fLastValidValue), fOverrideValue);
 
 rtNonFiniteConfirmed(CLK := tonNonFiniteInputTimeout.Q);
 IF rtNonFiniteConfirmed.Q THEN
     fbLog(sMsg := CONCAT(sName, ': input value not finite (NaN/Inf) for longer than timeout'));
 END_IF
 
-bError :=SEL(bOverride, THIS^.tonNonFiniteInputTimeout.Q, bOverrideError);]]></ST>
+// The fault state is the sanitizer's own: an override substitutes the value and never
+// masks the locally detected non-finite condition.
+bError := tonNonFiniteInputTimeout.Q;]]></ST>
     </Implementation>
     <Property Name="Error" Id="{923f5a6d-36ca-4c5b-a726-b6b176323b9c}">
       <Declaration><![CDATA[PROPERTY Error : BOOL

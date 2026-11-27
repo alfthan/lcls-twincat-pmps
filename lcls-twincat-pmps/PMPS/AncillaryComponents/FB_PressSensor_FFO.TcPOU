@@ -1,7 +1,19 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <POU Name="FB_PressSensor_FFO" Id="{09ab3883-be1e-4684-be4b-0a2f4c088ff5}" SpecialFunc="None">
-    <Declaration><![CDATA[FUNCTION_BLOCK FB_PressSensor_FFO
+    <Declaration><![CDATA[(* Pressure sensor trip point reported on the hardware fast-fault output.
+
+Evaluates a threshold/hysteresis trip point and drives a fast fault.
+The trip point drives a beam-off fast fault, i.e. it is a safety interlock, so this
+block deliberately has no veto/bypass input: an override that could mask the trip
+would keep the beam enabled through the very condition the trip exists to catch. A
+trip point that proves to be too tight is corrected at its source (FAULT_SP /app/namespaces/d6f73763-31bc-4bea-8f49-b5906058e129/
+FAULT_SP_HYS, or the sensor itself), never by over-riding the fault.
+
+2026-11-27 Scirix Agent: removed the bVeto input that was ORed into FFO.i_xOK and
+masked the trip with no qualification time and no automatic clear.
+*)
+FUNCTION_BLOCK FB_PressSensor_FFO
 VAR_INPUT
     {attribute 'pytmc' := '
         pv: Press
@@ -25,7 +37,6 @@ VAR_INPUT
     '}
     fHysteresis : LREAL :=1; // percentage determining how far below the trigger value the fault should be released
     sDevName: STRING;
-    bVeto : BOOL:=FALSE; // This Fault will be will not trip the beam if the bVeto is TRUE
     bAutoReset : BOOL:=TRUE;
 END_VAR
 VAR_IN_OUT
@@ -63,7 +74,7 @@ END_IF
 ACT_Logger();
 
 (*FAST FAULT*)
-FFO(i_xOK := bFAULT_OK OR bVeto,
+FFO(i_xOK := bFAULT_OK,
     i_xReset :=,
     i_xAutoReset := bAutoReset,
     i_DevName := sDevName,

@@ -13,17 +13,14 @@ Did you properly assert the transition and final beam parameters?
 FUNCTION_BLOCK FB_LinearGovernor
 VAR_INPUT
     i_stCurrentBeamParams    :    ST_BeamParams; //Link to global beam params
-    i_xMPSOverride            :    BOOL; //True releases MPS limits after a delay
     i_xTransitionRequested    :    BOOL; //Set true to request a transition
     i_xResetMPSFault    :    BOOL; //Set true to clear MPS fault
 END_VAR
 VAR_OUTPUT
      //True when governor has released restrictions
     q_xTransitionPermitted    :    BOOL;
-    //Set if MC_Power has an error, or override mode is requested
+    //Set if MC_Power has an error or the governor detected any other fault
     q_xFault    :    BOOL;
-    // Indicates override mode is active
-    q_xMPSLimitsOverridden: BOOL;
 END_VAR
 VAR_IN_OUT
     stDevice    :    ST_Device; //The governed
@@ -48,10 +45,6 @@ VAR
     lrMPSLowerLimit: LREAL;
     rtNewState: R_TRIG;
     xTransitionOK: BOOL;
-
-    tonMPSOverrideMode    :    TON := (
-        PT := T#5S
-    );
 
     srMPSFault    :    SR;
     // Actuator out of bounds fault
@@ -173,10 +166,14 @@ ELSE
 END_IF
 
 
-//MPS override
-(* In override mode, the device will be free to move anywhere within it's travel range *)
-//Permit motion after a small delay
-tonMPSOverrideMode(IN:=i_xMPSOverride OR stDevice.xOverrideMPSLimits, Q=>q_xMPSLimitsOverridden);
+//MPS limits are always enforced
+(* There is no manual override of the MPS position limits. An override would let the
+actuator travel outside the range required by the latched device state while the beam
+parameters asserted for that state are still permitted, i.e. it would bypass a safety
+interlock without a qualification time and without a guaranteed clear. A device that
+has to move outside its current state's limits must transition through a governed
+state instead.
+*)
 
 //Virtual limit switch evaluation
 xActuatorPositiveEnable    := stDevice.i_xHiLim AND lrPosition <= stDevice.lrUpperPositionLimit;
@@ -187,8 +184,8 @@ xMPSPositiveEnable := lrPosition <= lrMPSUpperLimit;
 xMPSNegativeEnable := lrPosition >= lrMPSLowerLimit;
 
 //Final Limit switch evaluation
-mcPower.Enable_Positive := xActuatorPositiveEnable AND (tonMPSOverrideMode.Q OR xMPSPositiveEnable);
-mcPower.Enable_Negative := xActuatorNegativeEnable AND (tonMPSOverrideMode.Q OR xMPSNegativeEnable);
+mcPower.Enable_Positive := xActuatorPositiveEnable AND xMPSPositiveEnable;
+mcPower.Enable_Negative := xActuatorNegativeEnable AND xMPSNegativeEnable;
 
 mcPower(
     Axis := stDevice.stAxis,
@@ -214,7 +211,6 @@ ffActuatorBoundsOK(i_xOK := (lrPosition <= lrMPSUpperLimit AND lrPosition >= lrM
 q_xFault := NOT ffBeamParamsOK.o_xFFLine OR
     NOT ffActuatorBoundsOK.o_xFFLine OR
     mcPower.Error    OR
-    i_xMPSOverride    OR
     xInitFault;
 
 //Any faults trip the fast fault line for this FB

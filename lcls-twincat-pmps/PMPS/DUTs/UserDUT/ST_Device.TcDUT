@@ -18,9 +18,6 @@ STRUCT
 
     //Supervisory System
 
-    //MPS Override
-    xOverrideMPSLimits	: BOOL := FALSE; //Set true to move beyond MPS limits. Note this will trip beam off.
-
     //Status and Faults
     xClearFaults	:	BOOL;	//Rising edge tries to clear faults of all kinds
 

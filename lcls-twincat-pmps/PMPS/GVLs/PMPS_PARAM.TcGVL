@@ -6,6 +6,8 @@ VAR_GLOBAL CONSTANT
     MAX_FAST_FAULTS	:	UINT := 50; // Max fast faults for an FFO
     MAX_ASSERTIONS    :    UDINT := 20; //Maximum number of BP requests in the arbiter
     TRANS_MARGIN : REAL := REAL#0.20; // Allowed % margin above requested transmission level in SafeBPCompare (0.2000 = 20deci% default). Note: change this value if scaling factor changes.
+    OVRD_QUALIFICATION_TIME : TIME := T#2S; // A manual override is honoured only after its permission has been continuously true this long
+    OVRD_MAX_DURATION : TIME := T#1M; // A manual override clears itself after this long, whether or not it is still requested
 END_VAR]]></Declaration>
   </GVL>
 </TcPlcObject>
