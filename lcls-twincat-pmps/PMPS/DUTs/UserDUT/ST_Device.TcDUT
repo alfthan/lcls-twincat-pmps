@@ -35,6 +35,12 @@ STRUCT
     nSafeState			:	UDINT; //State where the device is considered safe
     nTransitionState	:	UDINT;
 
+    // EPICS control input: requested device state index. Cleaned (checked against array limits) and deposited in nTargetState
+    {attribute 'pytmc' := '
+        pv: RequestedState
+        io: o
+        field: DESC Requested device state index from EPICS
+    '}
     nRequestedState	:	UDINT; //EPICS control, cleaned (checked against array limits) and deposited in nTargetState
     nTargetState	:	UDINT; //The requested state should be deposited here after cleaning
     nActiveState	:	UDINT; //The last successfully reached state
