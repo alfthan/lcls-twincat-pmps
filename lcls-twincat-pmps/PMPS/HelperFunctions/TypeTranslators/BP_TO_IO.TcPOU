@@ -17,7 +17,7 @@ FOR idx := 1 TO PMPS_GVL.AUX_ATTENUATORS DO
 END_FOR
 
 FOR idx := 1 TO PMPS_GVL.MAX_APERTURES DO
-    BP_TO_IO.astApertures[idx] := APT_TO_IO(BP.astApertures[idx]);
+    BP_TO_IO.astApertures[idx] := F_APT_TO_IO(BP.astApertures[idx]);
 END_FOR
 
 BP_TO_IO.aVetoDevices := BP.aVetoDevices;
