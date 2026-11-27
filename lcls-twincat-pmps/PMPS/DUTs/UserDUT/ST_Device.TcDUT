@@ -4,7 +4,7 @@
     <Declaration><![CDATA[TYPE ST_Device :
 STRUCT
     //IO
-    stAxis	:	AXIS_REF;
+    stAxis	:	AXIS_REF; //NC axis of the actuator; position readbacks (NcToPlc.ActPos) are LREAL in the axis' configured engineering units
     //The following limit switches must be TRUE or high (ie. NC) to enable that direction of motion
     //The EPICS display should show an inverted indicator to communicate end of travel reached
     i_xLoLim	AT %I*	:	BOOL; //Wire normally-closed
@@ -14,7 +14,7 @@ STRUCT
     lrUpperPositionLimit	:	LREAL := 10000000000; //Use in conjuntion with limit switches or set to a huge number to ignore
     lrLowerPositionLimit	:	LREAL := -10000000000; //Use in conjuntion with limit switches or set to a huge number to ignore
 
-    xEnable	:	BOOL := TRUE;
+    xEnable	:	BOOL := TRUE; //TRUE enables the drive via MC_Power; FALSE disables and prevents motion
 
     //Supervisory System
 
@@ -29,11 +29,11 @@ STRUCT
     xSMFault		:	BOOL;	//Indicates component state machine is faulted
 
     //Device States
-    StateTable		:	FB_LinearDeviceStateTable;
+    StateTable		:	FB_LinearDeviceStateTable; //Device state database, holding one ST_DeviceState per state number; queried with A_Lookup(key := state number)
 
     stTransitionState	:	ST_DeviceState; //The transition state might have non-zero beam parameters
     nSafeState			:	UDINT; //State where the device is considered safe
-    nTransitionState	:	UDINT;
+    nTransitionState	:	UDINT; //State number of the transition state, which may permit non-zero beam parameters (see stTransitionState)
 
     nRequestedState	:	UDINT; //EPICS control, cleaned (checked against array limits) and deposited in nTargetState
     nTargetState	:	UDINT; //The requested state should be deposited here after cleaning
