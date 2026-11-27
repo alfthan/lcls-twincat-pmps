@@ -14,22 +14,50 @@ In PMPS mode, if a device has submitted a preemptive request and received
 acknowledgement, then the transmission setpoint will be governed at least
 by that device's setpoint. Therefore, the attenuator may be moving without
 generating a fault.
+
+The status-word bit map is not written out here: the bit positions are the
+named constants PMPS_GVL.ATT_STATUS_AT_TARGET, ATT_STATUS_MOVING,
+ATT_STATUS_LOCAL_MODE, ATT_STATUS_PMPS_MODE and ATT_STATUS_OK, whose layout
+matches the BIT members of ST_AttenuatorStatus. Change the bit map there, in
+one place, and this function follows.
+
+HISTORY
+    2020-11-05 / Alex Wallace
+        Function created with the transmission (BP) compare change; status
+        bits were selected with numeric literals.
+    2026-11-27 / Scirix Agent
+        Replaced the numeric status-bit selectors with the named status-bit
+        constants declared in PMPS_GVL. Logic and result are unchanged (audit
+        finding #269, convention conv_a8288970c008).
 *)
 FUNCTION F_AttenuatorOK : BOOL
 VAR_INPUT
-    xStatus : WORD;
+    xStatus : WORD; // Attenuator status word, bit map PMPS_GVL.ATT_STATUS_* (layout of ST_AttenuatorStatus)
 END_VAR
 VAR
+    xAtTarget  : BOOL; // Status bit 0: attenuator has reached its requested transmission
+    xMoving    : BOOL; // Status bit 1: attenuator is moving to a new transmission
+    xLocalMode : BOOL; // Status bit 2: local mode, PMPS requests ignored
+    xPMPSMode  : BOOL; // Status bit 3: PMPS mode, setpoints taken only from PMPS
+    xOK        : BOOL; // Status bit 4: no attenuator error, status is stable
 END_VAR
 ]]></Declaration>
     <Implementation>
-      <ST><![CDATA[IF xStatus.2 THEN // Local mode
-    F_AttenuatorOK := xStatus.0 and NOT xStatus.1;
-ELSIF xStatus.3 AND NOT xStatus.2 THEN // PMPS mode
+      <ST><![CDATA[// Decode the status word through the named bit map in PMPS_GVL so the
+// decision logic below reads by name rather than by bit position.
+xAtTarget  := (xStatus AND PMPS_GVL.ATT_STATUS_AT_TARGET) <> 0;
+xMoving    := (xStatus AND PMPS_GVL.ATT_STATUS_MOVING) <> 0;
+xLocalMode := (xStatus AND PMPS_GVL.ATT_STATUS_LOCAL_MODE) <> 0;
+xPMPSMode  := (xStatus AND PMPS_GVL.ATT_STATUS_PMPS_MODE) <> 0;
+xOK        := (xStatus AND PMPS_GVL.ATT_STATUS_OK) <> 0;
+
+IF xLocalMode THEN // Local mode
+    F_AttenuatorOK := xAtTarget AND NOT xMoving;
+ELSIF xPMPSMode AND NOT xLocalMode THEN // PMPS mode
     F_AttenuatorOK := TRUE;
 END_IF
 
-F_AttenuatorOK := xStatus.4 AND F_AttenuatorOK;]]></ST>
+F_AttenuatorOK := xOK AND F_AttenuatorOK;]]></ST>
     </Implementation>
   </POU>
 </TcPlcObject>

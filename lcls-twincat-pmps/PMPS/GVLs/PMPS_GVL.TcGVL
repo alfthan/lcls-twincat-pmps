@@ -52,6 +52,18 @@ VAR_GLOBAL CONSTANT
 
     TRANS_SCALING_FACTOR : REAL := REAL#1.0; // Scaling factor for fixed-point transmission
 
+    // Attenuator status-word bit map. The WORD status word read from an
+    // attenuator uses the bit layout declared by ST_AttenuatorStatus. The bits
+    // are named once here so a change of the hardware bit map is made in one
+    // place instead of being retyped at every bit selector.
+    // Test a single status bit with:
+    //     xSet := (xStatus AND PMPS_GVL.ATT_STATUS_<NAME>) <> 0;
+    ATT_STATUS_AT_TARGET  : WORD := 2#0000_0000_0000_0001; // bit 0: attenuator has reached its requested transmission
+    ATT_STATUS_MOVING     : WORD := 2#0000_0000_0000_0010; // bit 1: attenuator is moving to a new transmission
+    ATT_STATUS_LOCAL_MODE : WORD := 2#0000_0000_0000_0100; // bit 2: local mode, PMPS requests ignored and a local setpoint followed
+    ATT_STATUS_PMPS_MODE  : WORD := 2#0000_0000_0000_1000; // bit 3: PMPS mode, setpoints taken only from PMPS
+    ATT_STATUS_OK         : WORD := 2#0000_0000_0001_0000; // bit 4: no attenuator error, status is stable
+
     AUX_ATTENUATORS : UINT := 16; // Maximum # of attenuators in the PMPS
     MAX_VETO_DEVICES   :   UINT := 16;
     stAttenuators : ST_PMPS_Attenuator :=(nTran:=1,xAttOK:=1);
