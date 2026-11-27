@@ -1,62 +1,89 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <DUT Name="ST_FFOverride" Id="{a5b3ae18-23a6-4a51-97e3-c5c85bb95768}">
-    <Declaration><![CDATA[TYPE ST_FFOverride :
+    <Declaration><![CDATA[(*
+ST_FFOverride - override ("veto") data of one fast fault.
+
+Purpose:
+    Holds one fast fault's override request and the state of the running
+    override: the length the operator asked for, the UTC expiry stamp, the
+    elapsed and remaining override time, the resulting "override active" flag,
+    and the acknowledge flags that carry "override activated" / "override
+    released" to the logger exactly once.
+
+Usage:
+    Embedded as ST_FF.Ovrd in the astFF array of FB_HardwareFFOutput and
+    published to EPICS as the "Ovrd" sub-structure of each registered fast
+    fault. The EPICS pushbuttons write Activate/Deactivate (and Expiration);
+    EvaluateOverrides() runs the timer and clears both pushbuttons again, and
+    ExecuteLogging() consumes the acknowledge flags. Without an override a
+    faulted fast fault keeps the beam off; an active override merely permits
+    the beam until it expires, it never bypasses the fault itself.
+
+History:
+    2019-11-01 A. Wallace - initial declaration
+    2021-05-17            - StartDT added, override epoch fix
+    2026-11-27            - header comment added, member meanings and units documented
+*)
+TYPE ST_FFOverride :
 STRUCT
     {attribute 'pytmc' := '
         pv: Duration
         io: o
      '}
-    Duration : DINT; // DINT to be compatible with EPICS
+    Duration : DINT; // Override length requested by the operator, in seconds (EPICS-written; not evaluated by the PLC,
+                      // Expiration carries the effective end time). DINT to be compatible with EPICS
 
     {attribute 'pytmc' := '
         pv: Expiration
         io: o
      '}
-    Expiration : DINT; // DINT to be compatible with EPICS
+    Expiration : DINT; // Override end as a UTC UNIX timestamp in seconds since 1970-01-01 (EPICS-written; clamped to
+                        // StartDT + MaxTime, i.e. at most about 49.7 days ahead)
 
     {attribute 'pytmc' := '
         pv: StartDT
         io: o
      '}
-    StartDT : DINT; // DINT to be compatible with EPICS
+    StartDT : DINT; // UTC UNIX timestamp in seconds since 1970-01-01 at which the running override was activated
 
     {attribute 'pytmc' := '
         pv: Activate
         io: o
      '}
-    Activate : BOOL;
+    Activate : BOOL; // EPICS pushbutton: TRUE for one cycle requests (or re-arms) the override; the PLC clears it again
 
     {attribute 'pytmc' := '
         pv: Deactivate
         io: o
      '}
-    Deactivate : BOOL;
+    Deactivate : BOOL; // EPICS pushbutton: TRUE for one cycle ends the running override immediately; the PLC clears it again
 
     {attribute 'pytmc' := '
         pv: ElapsedTime
         io: i
      '}
-    ElapsedTime : DINT; // DINT to be compatible with EPICS
+    ElapsedTime : DINT; // Override time already served, in ms (TIME_TO_UDINT of Timer.ET); DINT to be compatible with EPICS
 
     {attribute 'pytmc' := '
         pv: RemainingTime
         io: i
      '}
-    RemainingTime : DINT; // DINT to be compatible with EPICS
+    RemainingTime : DINT; // Override time left before it expires, in ms (Timer.PT - ElapsedTime), floored at 0
 
     {attribute 'pytmc' := '
         pv: Active
         io: i
      '}
-    Active: BOOL;
+    Active : BOOL; // Override state taken from Timer.Q: TRUE while the override runs and permits the beam
 
-    Timer    :   TP;
-    OvrdActLogAck : BOOL;
-    OvrdExpLogAck : BOOL;
+    Timer : TP; // Tc2_Standard pulse timer that keeps the override active for PT after Activate; PT is loaded
+                // from Expiration and ET/PT feed ElapsedTime and RemainingTime
+    OvrdActLogAck : BOOL; // Set on the rising edge of Active, cleared by ExecuteLogging once "Override activated" is logged
+    OvrdExpLogAck : BOOL; // Set on the falling edge of Active, cleared by ExecuteLogging once "Override released" is logged
 
-    tOvrdActivate : R_TRIG;
-    tOvrdExpiring  : F_TRIG;
+    tOvrdActivate : R_TRIG; // Rising-edge detector on Active, sets OvrdActLogAck on the cycle the override starts
+    tOvrdExpiring : F_TRIG; // Falling-edge detector on Active, sets OvrdExpLogAck on the cycle the override ends
 END_STRUCT
 END_TYPE
 ]]></Declaration>
