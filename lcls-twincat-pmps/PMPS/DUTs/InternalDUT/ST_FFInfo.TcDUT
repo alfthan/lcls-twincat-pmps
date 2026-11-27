@@ -46,7 +46,7 @@ STRUCT
         pv: InfoString
         io: i
      '}
-    InfoString : STRING;
+    InfoString : STRING; // Set once at init: semicolon-delimited diagnostic summary "sPath;InUse;TypeCode;DevName;Desc;AutoReset;" (TypeCode in hex, no units), exported to EPICS
 END_STRUCT
 END_TYPE
 ]]></Declaration>
