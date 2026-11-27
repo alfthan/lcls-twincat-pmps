@@ -65,7 +65,7 @@ VAR
     bFinalAssertionFailed : BOOL;
 
     LogStrBuffer : ARRAY [0..LogBuffSize] OF STRING;
-    LogBuffIdx : FB_Index := (LowerLimit:=0, UpperLimit:=LogBuffSize);
+    LogBuffIdx : FB_Index := (i_nLowerLimit:=0, i_nUpperLimit:=LogBuffSize);
 
     nAssrtAttempt : INT; // Number of times we have tried asserting a BP set
 
