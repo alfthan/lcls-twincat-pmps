@@ -23,7 +23,7 @@ VAR_GLOBAL
         field: DESC Active eV Range constants
         field: EGU eV
     '}
-    g_areVBoundaries    :    ARRAY [0..g_cBoundaries]    OF    REAL;
+    g_areVBoundaries    :    ARRAY [0..g_cBoundaries]    OF    REAL; // Active photon-energy range boundaries in eV (ascending); set at init to g_areVBoundariesL or g_areVBoundariesK by PE_Ranges
 
 
 
@@ -41,27 +41,27 @@ VAR_GLOBAL RETAIN
         io: i
     '}
     AccumulatedFF : UDINT; // Any time a FF occurs
-    BP_jsonDoc 		: SJsonValue;
+    BP_jsonDoc 		: SJsonValue; // Retained JSON document of the most recently received beam-parameter request (unitless JSON text)
 END_VAR
 VAR_GLOBAL CONSTANT
 
     EXCLUDED_ASSERTION_ID    :    UDINT    := 16#FFFFFFFF; //An assertion ID that should always return "not found" in the assertion pool
-    VISIBLE_TEST_VELOCITY    :    LREAL    := 10;
-    FAST_TEST_VELOCITY        :    LREAL    := 100;
-    MAX_DEVICE_STATES        :    UDINT    := 300;
+    VISIBLE_TEST_VELOCITY    :    LREAL    := 10; // Speed of a slow, visually observable test move (mm/s); legacy constant, not referenced by PMPS code
+    FAST_TEST_VELOCITY        :    LREAL    := 100; // Speed of a fast test move (mm/s); legacy constant, not referenced by PMPS code
+    MAX_DEVICE_STATES        :    UDINT    := 300; // Highest index of the dataPool/entries arrays in FB_LinearDeviceStateTable (301 entries; count, no physical unit)
 
     TRANS_SCALING_FACTOR : REAL := REAL#1.0; // Scaling factor for fixed-point transmission
 
     AUX_ATTENUATORS : UINT := 16; // Maximum # of attenuators in the PMPS
-    MAX_VETO_DEVICES   :   UINT := 16;
-    stAttenuators : ST_PMPS_Attenuator :=(nTran:=1,xAttOK:=1);
+    MAX_VETO_DEVICES   :   UINT := 16; // Number of veto-device slots in ST_BeamParams.aVetoDevices (count, no physical unit)
+    stAttenuators : ST_PMPS_Attenuator :=(nTran:=1,xAttOK:=1); // Prototype attenuator used to initialise the astAttenuators arrays of the beam-parameter constants (nTran = transmission, dimensionless)
     {attribute 'pytmc' := '
         pv: @(PREFIX)FullBeamCnst
         io: i
         archive: 1Hz monitor
         field: DESC Full beam constant
     '}
-    cstFullBeam    :    ST_BeamParams := (
+    cstFullBeam    :    ST_BeamParams := ( // Full-beam constant: 100 % transmission, all eV/beam-class ranges and maximum rate; baseline for safe-BP comparisons
         nTran := 1,
         neVRange :=  2#1111_1111_1111_1111_1111_1111_1111_1111,
         nRate    := UDINT#1000000,
@@ -96,17 +96,17 @@ VAR_GLOBAL CONSTANT
         nRate    := 0
     );*)
 
-    cnMaxStateArrayLen : INT := 20;
+    cnMaxStateArrayLen : INT := 20; // Legacy limit on the number of state-table entries a single device may use (count, no physical unit); not referenced by PMPS code
 
 
     MAX_APERTURES : UINT := 4; // Maximum # of power slits in the PMPS
     {warning disable C0228}
-    DUMMY_AUX_ATT_ARRAY : ARRAY [1..PMPS_GVL.AUX_ATTENUATORS] OF ST_PMPS_Attenuator;
+    DUMMY_AUX_ATT_ARRAY : ARRAY [1..PMPS_GVL.AUX_ATTENUATORS] OF ST_PMPS_Attenuator; // Placeholder attenuator array for callers that have no real one (e.g. unit tests); contents are unused
     {warning restore C0228}
 
 
 
-    g_cBoundaries    :    INT    := 31;
+    g_cBoundaries    :    INT    := 31; // Highest valid index of the g_areVBoundaries* arrays, i.e. 32 boundaries at indices 0..31 (count, no physical unit)
 
 
 //////////////////////////
@@ -122,7 +122,7 @@ VAR_GLOBAL CONSTANT
         field: DESC eV Range hystersis
         field: EGU eV
     '}
-    reVHyst: REAL := 5; //
+    reVHyst: REAL := 5; // Hysteresis band applied around every photon-energy range boundary, in eV (default 5 eV)
 
 
     {attribute 'pytmc' := '
@@ -132,7 +132,7 @@ VAR_GLOBAL CONSTANT
         field: DESC eV Range constants
         field: EGU eV
     '}
-    g_areVBoundariesL    :    ARRAY [0..g_cBoundaries]    OF    REAL    := [
+    g_areVBoundariesL    :    ARRAY [0..g_cBoundaries]    OF    REAL    := [ // Photon-energy range boundaries of the L (hard X-ray) line, ascending, in eV
     1.0E3,
     1.7E3,
     2.1E3,
@@ -175,7 +175,7 @@ VAR_GLOBAL CONSTANT
         field: DESC eV Range constants
         field: EGU eV
     '}
-    g_areVBoundariesK    :    ARRAY [0..g_cBoundaries]    OF    REAL    := [
+    g_areVBoundariesK    :    ARRAY [0..g_cBoundaries]    OF    REAL    := [ // Photon-energy range boundaries of the K (soft X-ray) line, ascending, in eV
     100,
     250,
     270,
