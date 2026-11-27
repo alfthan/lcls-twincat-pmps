@@ -7,6 +7,19 @@ Used to request a beam parameter set from EPICS.
 Technically just one of these is needed in the entire
 PMPS for a line.
 
+The four setpoints below are written from EPICS and are therefore untrusted input.
+Each of them is validated on every cycle against the limits declared in PMPS_GVL -
+the vendor span of the ReqBP:Transmission PV and the ranges the arbiter accepts for
+rate, photon energy ranges and beam class ranges - and clamped into that span
+before the request is handed to the arbiter, so no unchecked setpoint can reach
+Arbiter.AddRequest. Every clamp moves in the safe direction (less transmission,
+lower rate, fewer selectable beam classes); a non-finite transmission is replaced
+by the lower span limit. Out-of-span values are reported once per excursion through
+q_xError and one log message naming the offending setpoints.
+
+History:
+2026-11-27 Scirix Agent - validate and clamp the requested setpoints before they are
+                          submitted to the arbiter (audit finding #397)
 *)
 FUNCTION_BLOCK FB_BPControlDevice
 VAR_INPUT
@@ -37,12 +50,22 @@ VAR_INPUT
         nBCRange : WORD := 32767;
 END_VAR
 VAR_OUTPUT
+    (* TRUE while one or more requested setpoints are outside the limits declared in
+       PMPS_GVL. The request is still submitted, with the offending values clamped into
+       their span; the flag clears once every requested setpoint is back in span. *)
+    {attribute 'pytmc' := '
+        pv: ReqBP:Error
+        io: i
+    '}
+    q_xError : BOOL;
+
+    (* The validated beam parameter request: exactly what is submitted to the arbiter on Apply *)
+    q_stRequestedBP : ST_BeamParams;
 END_VAR
 VAR_IN_OUT
     Arbiter : FB_Arbiter;
 END_VAR
 VAR
-    EpicsReqBP : ST_BeamParams;
     {attribute 'pytmc' := '
         pv: ReqBP:Apply
         io: o
@@ -53,19 +76,74 @@ VAR
     sControlDeviceName: STRING:= 'BP Control Device';
     rtApply : R_TRIG;
 
-END_VAR
-]]></Declaration>
+    // Validation state of the requested setpoints, filled in each cycle (see the implementation)
+    bTranFinite : BOOL; // nTran is a usable REAL (not NaN/Inf)
+    bTranOutOfSpan : BOOL; // nTran is non-finite or outside the transmission span
+    bRateOutOfSpan : BOOL; // nRate is above the highest rate a request may carry
+    bEVOutOfSpan : BOOL; // neVRange selects a photon energy range that is not defined
+    bBCOutOfSpan : BOOL; // nBCRange selects a beam class bit that is not defined
+    bAnyOutOfSpan : BOOL; // Any of the above, i.e. the request had to be clamped
+
+    // One-shot report latch: set when an out-of-span setpoint is first seen, re-armed as
+    // soon as every requested setpoint is back inside its span.
+    bOutOfSpanReported : BOOL;
+    sOutOfSpanReport : STRING; // Names of the offending setpoints, for the one-shot report
+
+    fbLogger : FB_LogMessage := (eSubsystem := E_SubSystem.MPS, nMinTimeViolationAcceptable := 10);
+END_VAR]]></Declaration>
     <Implementation>
       <ST><![CDATA[
-EpicsReqBP.nTran := nTran;
-EpicsReqBP.neVRange := neVRange;
-EpicsReqBP.nRate := nRate;
-EpicsReqBP.nBCRange := nBCRange;
+// The requested setpoints are written from EPICS and are therefore untrusted input:
+// validate every one of them against the limits declared in PMPS_GVL and clamp it into
+// its span before the request can reach the arbiter. Nothing below is passed through
+// unchecked, and every clamp is in the safe direction.
+bTranFinite := IsFinite(x := F_REAL(in := nTran));
+bTranOutOfSpan := NOT bTranFinite
+    OR (nTran < PMPS_GVL.MIN_REQUESTED_TRAN)
+    OR (nTran > PMPS_GVL.MAX_REQUESTED_TRAN);
+IF bTranFinite THEN
+    q_stRequestedBP.nTran := LIMIT(PMPS_GVL.MIN_REQUESTED_TRAN, nTran, PMPS_GVL.MAX_REQUESTED_TRAN);
+ELSE
+    // NaN/Inf has no meaningful clamp: request no transmission instead of passing it on
+    q_stRequestedBP.nTran := PMPS_GVL.MIN_REQUESTED_TRAN;
+END_IF
 
+bRateOutOfSpan := nRate > PMPS_GVL.MAX_REQUESTED_RATE;
+q_stRequestedBP.nRate := MIN(nRate, PMPS_GVL.MAX_REQUESTED_RATE);
+
+bEVOutOfSpan := (neVRange AND NOT PMPS_GVL.EV_RANGE_MASK) <> 0;
+q_stRequestedBP.neVRange := neVRange AND PMPS_GVL.EV_RANGE_MASK;
+
+bBCOutOfSpan := (nBCRange AND NOT PMPS_GVL.BC_RANGE_MASK) <> 0;
+q_stRequestedBP.nBCRange := nBCRange AND PMPS_GVL.BC_RANGE_MASK;
+
+bAnyOutOfSpan := bTranOutOfSpan OR bRateOutOfSpan OR bEVOutOfSpan OR bBCOutOfSpan;
+q_xError := bAnyOutOfSpan;
+
+// Report each excursion once, naming the setpoints that had to be clamped, then re-arm as
+// soon as every requested setpoint is back inside its span again.
+IF bAnyOutOfSpan THEN
+    IF NOT bOutOfSpanReported THEN
+        sOutOfSpanReport := '';
+        IF bTranOutOfSpan THEN sOutOfSpanReport := CONCAT(sOutOfSpanReport, 'transmission '); END_IF
+        IF bRateOutOfSpan THEN sOutOfSpanReport := CONCAT(sOutOfSpanReport, 'rate '); END_IF
+        IF bEVOutOfSpan THEN sOutOfSpanReport := CONCAT(sOutOfSpanReport, 'photon energy ranges '); END_IF
+        IF bBCOutOfSpan THEN sOutOfSpanReport := CONCAT(sOutOfSpanReport, 'beam class ranges '); END_IF
+        fbLogger(
+            sMsg := CONCAT(CONCAT(sControlDeviceName, ': requested BP out of span, clamped: '), sOutOfSpanReport),
+            eSevr := TcEventSeverity.Warning);
+        bOutOfSpanReported := TRUE;
+    END_IF
+ELSE
+    bOutOfSpanReported := FALSE;
+END_IF
+
+// Submit the validated request. q_stRequestedBP holds the clamped values computed above,
+// so an out-of-span EPICS write can never become a beam parameter request unchecked.
 rtApply(CLK:=bApply);
 IF rtApply.Q THEN
     Arbiter.RemoveRequest(nControlDeviceID);
-    Arbiter.AddRequest(nControlDeviceID, EpicsReqBP, sControlDeviceName);
+    Arbiter.AddRequest(nControlDeviceID, q_stRequestedBP, sControlDeviceName);
     bApply := FALSE;
 END_IF]]></ST>
     </Implementation>

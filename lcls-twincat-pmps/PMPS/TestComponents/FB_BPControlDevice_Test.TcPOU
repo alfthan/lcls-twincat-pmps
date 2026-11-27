@@ -1,0 +1,103 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_BPControlDevice_Test" Id="{3e058d81-de6f-469e-ae0c-06d59a941ab6}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'call_after_init'}
+FUNCTION_BLOCK FB_BPControlDevice_Test EXTENDS TcUnit.FB_TestSuite
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+OutOfSpanRequestsAreClamped();
+InSpanRequestsPassThrough();]]></ST>
+    </Implementation>
+    <Method Name="OutOfSpanRequestsAreClamped" Id="{c8bf6b6f-38f6-4d42-9543-837e9d2d6663}">
+      <Declaration><![CDATA[// Verifies that EPICS setpoints outside the limits declared in PMPS_GVL are clamped into
+// their span before they can become a beam parameter request.
+METHOD OutOfSpanRequestsAreClamped
+VAR_INPUT
+END_VAR
+VAR
+END_VAR
+VAR_INST
+    fbControlDevice    :    FB_BPControlDevice(11);
+    fbArbiter    :    FB_Arbiter(12);
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('OutOfSpanRequestsAreClamped');
+
+// Every setpoint outside its declared span: too much transmission, too high a pulse rate,
+// all beam class bits and all photon energy range bits selected.
+fbControlDevice.nTran := 5.0;
+fbControlDevice.nRate := PMPS_GVL.MAX_REQUESTED_RATE + 1;
+fbControlDevice.neVRange := 16#FFFF_FFFF;
+fbControlDevice.nBCRange := 16#FFFF;
+fbControlDevice.bApply := TRUE;
+fbControlDevice(Arbiter := fbArbiter);
+
+AssertTrue(fbControlDevice.q_xError,
+    'Out-of-span requested BP was not reported in q_xError');
+
+AssertTrue(fbControlDevice.q_stRequestedBP.nTran <= PMPS_GVL.MAX_REQUESTED_TRAN,
+    'Requested transmission was not clamped to the upper span limit');
+
+AssertTrue(fbControlDevice.q_stRequestedBP.nTran >= PMPS_GVL.MIN_REQUESTED_TRAN,
+    'Requested transmission was not clamped to the lower span limit');
+
+AssertTrue(fbControlDevice.q_stRequestedBP.nRate = PMPS_GVL.MAX_REQUESTED_RATE,
+    'Requested rate was not clamped to the maximum a request may carry');
+
+AssertTrue(fbControlDevice.q_stRequestedBP.nBCRange = PMPS_GVL.BC_RANGE_MASK,
+    'Requested beam class ranges were not masked to the defined beam classes');
+
+AssertTrue(fbControlDevice.q_stRequestedBP.neVRange = 16#FFFF_FFFF,
+    'Requested photon energy ranges lost defined ranges while being validated');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="InSpanRequestsPassThrough" Id="{f6893d97-604a-43d3-b34a-1f29a2bee06b}">
+      <Declaration><![CDATA[// Verifies that a request inside every declared span is passed through unmodified and is
+// not reported as an error.
+METHOD InSpanRequestsPassThrough
+VAR_INPUT
+END_VAR
+VAR
+END_VAR
+VAR_INST
+    fbControlDevice    :    FB_BPControlDevice(21);
+    fbArbiter    :    FB_Arbiter(22);
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('InSpanRequestsPassThrough');
+
+fbControlDevice.nTran := 0.5;
+fbControlDevice.nRate := 10;
+fbControlDevice.neVRange := 2#0000_0000_0000_0000_0000_0000_0000_0011;
+fbControlDevice.nBCRange := 2#0000_0000_0000_0011;
+fbControlDevice.bApply := TRUE;
+fbControlDevice(Arbiter := fbArbiter);
+
+AssertFalse(fbControlDevice.q_xError,
+    'In-span requested BP was reported as out of span');
+
+AssertTrue(fbControlDevice.q_stRequestedBP.nTran = 0.5,
+    'In-span requested transmission was modified');
+
+AssertTrue(fbControlDevice.q_stRequestedBP.nRate = 10,
+    'In-span requested rate was modified');
+
+AssertTrue(fbControlDevice.q_stRequestedBP.neVRange = 2#11,
+    'In-span requested photon energy ranges were modified');
+
+AssertTrue(fbControlDevice.q_stRequestedBP.nBCRange = 2#11,
+    'In-span requested beam class ranges were modified');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

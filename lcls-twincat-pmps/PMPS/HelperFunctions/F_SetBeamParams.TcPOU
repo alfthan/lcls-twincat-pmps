@@ -15,11 +15,11 @@ VAR
 END_VAR
 ]]></Declaration>
     <Implementation>
-      <ST><![CDATA[BeamParams.nTran := LIMIT(0,nTran,PMPS_GVL.TRANS_SCALING_FACTOR);
+      <ST><![CDATA[BeamParams.nTran := LIMIT(PMPS_GVL.MIN_REQUESTED_TRAN, nTran, PMPS_GVL.MAX_REQUESTED_TRAN);
 BeamParams.astAttenuators := astAuxAtt;
-BeamParams.neVRange := neVRange;
-BeamParams.nRate    := MIN(nRate,1000000);
-BeamParams.nBCRange	:= MIN(nBCRange,32767);
+BeamParams.neVRange := neVRange AND PMPS_GVL.EV_RANGE_MASK;
+BeamParams.nRate    := MIN(nRate, PMPS_GVL.MAX_REQUESTED_RATE);
+BeamParams.nBCRange	:= MIN(nBCRange, PMPS_GVL.BC_RANGE_MASK);
 
 F_SetBeamParams    := BeamParams;]]></ST>
     </Implementation>

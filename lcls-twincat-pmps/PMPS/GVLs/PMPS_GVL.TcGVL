@@ -52,6 +52,16 @@ VAR_GLOBAL CONSTANT
 
     TRANS_SCALING_FACTOR : REAL := REAL#1.0; // Scaling factor for fixed-point transmission
 
+    // Limits for beam parameter requests received from outside the PLC (EPICS -> FB_BPControlDevice).
+    // Every requested setpoint is checked against these before it is handed to an arbiter; see
+    // FB_BPControlDevice for the enforcement and F_SetBeamParams for the same span applied to
+    // internally computed requests.
+    MIN_REQUESTED_TRAN : REAL := REAL#0.0; // LOPR of the ReqBP:Transmission PV - lowest transmission a request may carry
+    MAX_REQUESTED_TRAN : REAL := REAL#1.0; // HOPR of the ReqBP:Transmission PV - highest transmission a request may carry, equals TRANS_SCALING_FACTOR
+    MAX_REQUESTED_RATE : UDINT := 1000000; // Highest pulse rate (Hz) a request may carry, matches cstFullBeam
+    BC_RANGE_MASK : WORD := 16#7FFF; // Beam classes a request may select (bits 0..14); bit 15 has no assigned beam class
+    EV_RANGE_MASK : DWORD := 16#FFFF_FFFF; // One bit per defined eV range. g_cBoundaries = 31 declares 32 ranges, so all 32 bits are valid today; the mask keeps the check correct if the range list is shortened
+
     AUX_ATTENUATORS : UINT := 16; // Maximum # of attenuators in the PMPS
     MAX_VETO_DEVICES   :   UINT := 16;
     stAttenuators : ST_PMPS_Attenuator :=(nTran:=1,xAttOK:=1);
