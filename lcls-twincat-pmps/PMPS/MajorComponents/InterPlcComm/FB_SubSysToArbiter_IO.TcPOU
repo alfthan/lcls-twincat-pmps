@@ -130,7 +130,7 @@ ffPMPSIO_Disconnect(
     io_fbFFHWO := fbFFHWO,
     i_xReset := Reset,
     i_DevName := sName,
-    i_TypeCode := 6,
+    i_TypeCode := PMPS_GVL.FF_TYPE_SUBSYS_TO_ARBITER_IO,
     i_xVetoable := FALSE
     );]]></ST>
     </Implementation>

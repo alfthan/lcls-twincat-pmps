@@ -49,6 +49,10 @@ VAR_GLOBAL CONSTANT
     VISIBLE_TEST_VELOCITY    :    LREAL    := 10;
     FAST_TEST_VELOCITY        :    LREAL    := 100;
     MAX_DEVICE_STATES        :    UDINT    := 300;
+    // Fast fault type codes (ST_FFInfo.TypeCode): the fault class a fast fault reports
+    // to its FFO registration and to the fast-fault PV interface. Declared once here so
+    // the code is written in one place and every block reporting that class reuses it.
+    FF_TYPE_SUBSYS_TO_ARBITER_IO : UINT := 6; // FB_SubSysToArbiter_IO: arbiter network interface disconnected or not OP
 
     TRANS_SCALING_FACTOR : REAL := REAL#1.0; // Scaling factor for fixed-point transmission
 
