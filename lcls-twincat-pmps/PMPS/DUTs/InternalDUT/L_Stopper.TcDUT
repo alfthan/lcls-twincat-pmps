@@ -17,7 +17,7 @@ TYPE L_Stopper :
     XPP_SB6_MONO:=10, // Indicates that XPP SB6is in MONO Line
     XPP_SB6_PINK:=11, //Indicates that XPP SB6 is in PINK Line
     ST2L0 := 12, // ST2L0 XRT Stopper
-    DEFAULT := PMPS_GVL.MAX_VETO_DEVICES // DO NOT USE FOR ANYTHING
+    DEFAULT := 0 // Not configured: FB_VetoDevice skips the BP update for index 0
 );
 END_TYPE
 ]]></Declaration>

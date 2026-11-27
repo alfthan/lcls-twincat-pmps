@@ -16,7 +16,7 @@ TYPE K_Stopper :
     ST1K3 :=9, //TXI Kline PPS stopper in
     MR2K3_IN := 10, // TXI MR2K3 Offset Mirror state
     MR2K3_OUT := 11, // TXI MR2K3 Offset Mirror horizontal state
-    DEFAULT := PMPS_GVL.MAX_VETO_DEVICES // DO NOT USE FOR ANYTHING
+    DEFAULT := 0 // Not configured: FB_VetoDevice skips the BP update for index 0
 );
 END_TYPE
 ]]></Declaration>

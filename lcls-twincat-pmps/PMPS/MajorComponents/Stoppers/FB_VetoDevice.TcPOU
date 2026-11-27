@@ -1,7 +1,12 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <POU Name="FB_VetoDevice" Id="{23cb2824-120c-479d-8abf-179942f9afb5}" SpecialFunc="None">
-    <Declaration><![CDATA[// Relays veto device state, updates current BP and sends a message when veto state changes.
+    <Declaration><![CDATA[// FB_VetoDevice
+// Relays veto device state, updates current BP and sends a message when veto state changes.
+// VetoDevice_IN / VetoDevice_OUT name the aVetoDevices slots this instance drives. They are
+// untrusted configuration: an index outside ARRAY [1..PMPS_GVL.MAX_VETO_DEVICES] (0 = not
+// configured) leaves the beam parameters untouched and is reported once through the logger.
+// stCurrentBP is a caller-supplied VAR_IN_OUT and is validated with __ISVALIDREF first.
 FUNCTION_BLOCK FB_VetoDevice
 VAR_INPUT
     i_bIn : BOOL;
@@ -12,12 +17,12 @@ VAR_OUTPUT
     q_bOut : BOOL;
 END_VAR
 VAR_IN_OUT
-    stCurrentBP : ST_BeamParams;
+    stCurrentBP : ST_BeamParams; // Beam parameter set to update: must be a valid reference
 END_VAR
 VAR
 
-    VetoDevice_IN : UINT := PMPS_GVL.MAX_VETO_DEVICES; // Veto device state array index
-    VetoDevice_OUT : UINT := PMPS_GVL.MAX_VETO_DEVICES; // Veto device state array index
+    VetoDevice_IN : UINT := 0; // aVetoDevices index for the IN state (valid 1..PMPS_GVL.MAX_VETO_DEVICES, 0 = not configured)
+    VetoDevice_OUT : UINT := 0; // aVetoDevices index for the OUT state (valid 1..PMPS_GVL.MAX_VETO_DEVICES, 0 = not configured)
 
     VetoDeviceName : STRING;
     {attribute 'instance-path'}
@@ -33,6 +38,11 @@ VAR
     ////////////////////////////////
 
     bInit: BOOL := TRUE;
+
+    // Guards for caller-supplied data (latched so each diagnostic is logged once)
+    bRefInvalidWarned : BOOL; // TRUE once the invalid stCurrentBP reference has been reported
+    bInIndexInvalidWarned : BOOL; // TRUE once a bad VetoDevice_IN index has been reported
+    bOutIndexInvalidWarned : BOOL; // TRUE once a bad VetoDevice_OUT index has been reported
 END_VAR
 ]]></Declaration>
     <Implementation>
@@ -61,8 +71,36 @@ END_IF
 
 // Update current beam parameters
 /////////////////////////////////////
-    stCurrentBP.aVetoDevices[VetoDevice_IN] := i_bIn;
-    stCurrentBP.aVetoDevices[VetoDevice_OUT] := i_bOut;]]></ST>
+// stCurrentBP is supplied by the caller, so validate the reference before any
+// dereference: an unbound VAR_IN_OUT reference faults the PLC.
+IF __ISVALIDREF(stCurrentBP) THEN
+
+    // aVetoDevices is ARRAY [1..PMPS_GVL.MAX_VETO_DEVICES]; bounds-check each configured
+    // index before indexing so a bad configuration cannot write outside the array.
+    IF (VetoDevice_IN >= 1) AND (VetoDevice_IN <= PMPS_GVL.MAX_VETO_DEVICES) THEN
+        stCurrentBP.aVetoDevices[VetoDevice_IN] := i_bIn;
+    ELSIF NOT bInIndexInvalidWarned THEN
+        fbLogMsg.sMsg := CONCAT(VetoDeviceName, ': veto IN index not configured or out of range, BP not updated');
+        fbLogMsg();
+        bInIndexInvalidWarned := TRUE;
+    END_IF
+
+    IF (VetoDevice_OUT >= 1) AND (VetoDevice_OUT <= PMPS_GVL.MAX_VETO_DEVICES) THEN
+        stCurrentBP.aVetoDevices[VetoDevice_OUT] := i_bOut;
+    ELSIF NOT bOutIndexInvalidWarned THEN
+        fbLogMsg.sMsg := CONCAT(VetoDeviceName, ': veto OUT index not configured or out of range, BP not updated');
+        fbLogMsg();
+        bOutIndexInvalidWarned := TRUE;
+    END_IF
+
+ELSE
+    // Invalid reference: skip the update rather than fault the PLC.
+    IF NOT bRefInvalidWarned THEN
+        fbLogMsg.sMsg := CONCAT(VetoDeviceName, ': stCurrentBP reference invalid, BP not updated');
+        fbLogMsg();
+        bRefInvalidWarned := TRUE;
+    END_IF
+END_IF]]></ST>
     </Implementation>
   </POU>
 </TcPlcObject>
