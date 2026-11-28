@@ -34,7 +34,7 @@ VAR_INPUT
 END_VAR
 VAR_OUTPUT
 
-    q_xTransitionAuthorized    :    BOOL := FALSE; //Rising edge indicating the device is safe to move, use as input to move execute (which requires a rising edge)
+    q_xTransitionAuthorized    :    BOOL := FALSE; //Safe-to-move permit for the caller. Only TRUE while the block is actively Transitioning; driven FALSE on fault, on abort and on any other exit from Transitioning.
 
     bError : BOOL; // Set if some issue occurs within the bptm
     nErrId : UINT; // Set to non-zero to help understand the error.
@@ -187,9 +187,20 @@ CASE eBPTMState OF
         eBPTMState := E_BPTMState.Idle;
 
     Error:
+        //Safety: a fault must revoke the motion permit. Without an explicit deauthorize
+        //a fault raised while Transitioning would leave q_xTransitionAuthorized TRUE and
+        //the caller could keep commanding motion under a permit nobody maintains.
+        DeauthorizeTransition();
         bError := TRUE;
         eBPTMState := E_BPTMState.Idle;
 END_CASE
+
+//Safety: q_xTransitionAuthorized is a motion permit and may only be TRUE while the block
+//is actively Transitioning. Every other state (fault, abort, completion, idle, first scan)
+//drives it back to the safe FALSE state so a permit can never outlive a transition.
+IF eBPTMState <> E_BPTMState.Transitioning AND q_xTransitionAuthorized THEN
+    DeauthorizeTransition();
+END_IF
 
 xEntry := ePrevState <> eBPTMState;
 ePrevState := eBPTMState;

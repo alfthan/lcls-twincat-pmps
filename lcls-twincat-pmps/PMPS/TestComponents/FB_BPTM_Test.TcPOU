@@ -153,6 +153,8 @@ E_BPTMTestStates.Done:
     AssertTrue(fbBPTM_TestBasicFunction.bDone, 'Done should be set');
     AssertFalse(fbBPTM_TestBasicFunction.bError, 'Error should be cleared');
     AssertFalse(fbBPTM_TestBasicFunction.bBusy, 'Busy should be false');
+    AssertFalse(fbBPTM_TestBasicFunction.q_xTransitionAuthorized,
+        'Motion permit must be FALSE outside of Transitioning');
 
     TEST_FINISHED_NAMED('BPTMTest');
 
@@ -219,6 +221,9 @@ E_BPTMTestStates.Error:
 
         AssertTrue(fbBPTM_TestFullArb.bError AND fbBPTM_TestFullArb.nErrId = PMPS_CODES.NoRoomInArb,
             'Incorrect error response from full arbiter.');
+
+        AssertFalse(fbBPTM_TestFullArb.q_xTransitionAuthorized,
+            'Motion permit must be FALSE while the BPTM is in error');
 
         TEST_FINISHED_NAMED('BPTM Full Error');
 
