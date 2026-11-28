@@ -17,19 +17,19 @@ generating a fault.
 *)
 FUNCTION F_AttenuatorOK : BOOL
 VAR_INPUT
-    xStatus : WORD;
+    wStatus : WORD;
 END_VAR
 VAR
 END_VAR
 ]]></Declaration>
     <Implementation>
-      <ST><![CDATA[IF xStatus.2 THEN // Local mode
-    F_AttenuatorOK := xStatus.0 and NOT xStatus.1;
-ELSIF xStatus.3 AND NOT xStatus.2 THEN // PMPS mode
+      <ST><![CDATA[IF wStatus.2 THEN // Local mode
+    F_AttenuatorOK := wStatus.0 and NOT wStatus.1;
+ELSIF wStatus.3 AND NOT wStatus.2 THEN // PMPS mode
     F_AttenuatorOK := TRUE;
 END_IF
 
-F_AttenuatorOK := xStatus.4 AND F_AttenuatorOK;]]></ST>
+F_AttenuatorOK := wStatus.4 AND F_AttenuatorOK;]]></ST>
     </Implementation>
   </POU>
 </TcPlcObject>
