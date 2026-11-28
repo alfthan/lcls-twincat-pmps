@@ -1,23 +1,81 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <POU Name="F_DifferentBeamParams" Id="{a38d8879-5f7d-4866-9636-9bf4011c964f}" SpecialFunc="None">
-    <Declaration><![CDATA[(*Compares BeamParam1 to BeamParam2, if any parameters of BeamParam1 are different than BeamParam2
-the result will be true. *)
+    <Declaration><![CDATA[(*
+    F_DifferentBeamParams - TRUE when two beam-parameter sets are not identical.
+
+    PURPOSE
+        Compares BeamParam1 with BeamParam2 and returns TRUE if any of the
+        beam-parameter fields that it compares differ between the two sets.
+        Returns FALSE only when the two sets are identical on every compared
+        field.
+
+    USAGE
+        Call with two ST_BeamParams instances, in either order - the comparison
+        is symmetric (each field is tested with <>, and each array loop folds
+        its differences into a single flag):
+            xTheyDiffer := F_DifferentBeamParams(stExpectedBP, stArbitratedBP);
+        Both arguments are read only. The function keeps no state and has no
+        side effects, so it may be called from any task and from test code.
+        It is currently used by the TcUnit suites (FB_DiffBP_Test,
+        FB_Arbiter_Test) to assert that an arbitrated or propagated BP set
+        matches the expected one.
+        Only the array-size constants in PMPS_GVL (AUX_ATTENUATORS,
+        MAX_VETO_DEVICES, MAX_APERTURES) are read; no live beam-parameter
+        globals are consulted.
+
+    OBJECTIVES
+        - Give "the same beam parameters" one definition, so the arbiter and
+          the tests cannot drift apart on what equality means.
+        - Compare exactly the fields that constrain the beam: transmission,
+          photon-energy range mask, pulse rate, beam-class range mask,
+          auxiliary attenuators, veto devices and aperture slit gaps.
+        - Deliberately not compared: neV, nBeamClass, nMachineMode and the
+          bookkeeping fields xValidToggle / xValid / nCohortInt. Status and
+          arbitration bookkeeping are therefore invisible to this function; a
+          caller that cares about them must compare them separately.
+        - Stay allocation-free and side-effect-free so it is safe to call from
+          a test assertion.
+
+    HISTORY
+        2019-08-20 / Alex Wallace
+            Function created (first commit of this repository; earlier history
+            is in pmps-dev).
+        2026-11-28 / Scirix Agent
+            Added this header and an inline comment for every declaration;
+            documentation only, no behaviour change
+            (audit finding #262, convention conv_321640e095c0).
+
+    NOTE
+        The field-by-field implementation below is the authority for what is
+        compared. The commented-out nBeamClass comparison in the body records an
+        open question about whether beam class belongs in this check.
+        The local flag names end in "OK" for historical reasons: a TRUE flag means
+        that field DIFFERS, which is what makes the result TRUE.
+*)
 {attribute 'no_check'}
 FUNCTION F_DifferentBeamParams : BOOL
 VAR_INPUT
-    BeamParam1    :    ST_BeamParams;
-    BeamParam2    :    ST_BeamParams;
+    BeamParam1    :    ST_BeamParams; // Set A being compared (read only): transmission nTran (0 .. PMPS_GVL.TRANS_SCALING_FACTOR, where TRANS_SCALING_FACTOR means 100 % transmission, currently REAL#1.0), eV-range mask neVRange, rate nRate (Hz), beam-class-range mask nBCRange, attenuators astAttenuators[].nTran (%), veto devices aVetoDevices[], apertures astApertures[].Width/.Height (mm).
+    BeamParam2    :    ST_BeamParams; // Set B, compared field for field against BeamParam1 (read only). Same units as BeamParam1.
 END_VAR
 VAR
+    // TRUE when the transmission differs: BeamParam1.nTran <> BeamParam2.nTran (0 .. PMPS_GVL.TRANS_SCALING_FACTOR, where TRANS_SCALING_FACTOR means 100 % transmission)
     xAttOK: BOOL := FALSE;
+    // TRUE when the photon-energy range differs: BeamParam1.neVRange <> BeamParam2.neVRange (bitmask, one bit per eV range)
     xEvOK: BOOL := FALSE;
+    // TRUE when the pulse rate differs: BeamParam1.nRate <> BeamParam2.nRate (Hz)
     xRateOK: BOOL := FALSE;
+    // TRUE when any stopper state differs: BeamParam1.aVetoDevices[idx] <> BeamParam2.aVetoDevices[idx] (BOOL per veto device)
     xaStopper : BOOL := FALSE;
+    // TRUE when any auxiliary attenuator transmission differs: BeamParam1.astAttenuators[idx].nTran <> BeamParam2.astAttenuators[idx].nTran (%)
     xaAtt : BOOL := FALSE;
+    // TRUE when any aperture slit gap differs: astApertures[idx].Width or .Height <> the BeamParam2 counterpart (mm)
     xaApt : BOOL := FALSE;
+    // TRUE when the beam-class range differs: BeamParam1.nBCRange <> BeamParam2.nBCRange (bitmask, one bit per beam-class range)
     xBCOK : BOOL := FALSE;
 
+    // Loop index shared by the attenuator, veto-device and aperture loops; all three arrays are 1-based, so it runs 1..n.
     idx : UINT;
 
 
