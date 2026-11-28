@@ -6,6 +6,14 @@ VAR_GLOBAL CONSTANT
     MAX_FAST_FAULTS	:	UINT := 50; // Max fast faults for an FFO
     MAX_ASSERTIONS    :    UDINT := 20; //Maximum number of BP requests in the arbiter
     TRANS_MARGIN : REAL := REAL#0.20; // Allowed % margin above requested transmission level in SafeBPCompare (0.2000 = 20deci% default). Note: change this value if scaling factor changes.
+
+    // Beam class assertion lines. Each PMPS drives one hardwired output per beam
+    // class line, so the two caps below size the q_BC_ASSERTION_LINES arrays of
+    // FB_BeamClassOutputs and FB_BeamClassOutputs_BCD and bound the loops that
+    // fill them. They are declared here so every user of the same limit reads one
+    // definition instead of repeating a literal.
+    MAX_BEAM_CLASS_LINES     : BYTE := 8; // Max lines of FB_BeamClassOutputs (channels 1-8; channel 8 = full beam)
+    MAX_BEAM_CLASS_BCD_LINES : BYTE := 4; // Max lines of FB_BeamClassOutputs_BCD (one BCD digit, 4 bits)
 END_VAR]]></Declaration>
   </GVL>
 </TcPlcObject>
