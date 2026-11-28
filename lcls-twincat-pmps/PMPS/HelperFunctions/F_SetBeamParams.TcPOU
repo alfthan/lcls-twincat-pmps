@@ -1,15 +1,120 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <POU Name="F_SetBeamParams" Id="{a4b27d6a-ec21-4812-9b64-4caff94fb4ba}" SpecialFunc="None">
-    <Declaration><![CDATA[FUNCTION F_SetBeamParams : ST_BeamParams
+    <Declaration><![CDATA[(*
+    F_SetBeamParams - builds a beam-parameter set from explicit values, with
+    the PMPS limits applied to it.
+
+    PURPOSE
+        Packs the five beam-defining quantities a caller knows - requested
+        transmission, photon-energy range mask, pulse rate, beam-class range
+        mask and the auxiliary attenuator state - into one ST_BeamParams, and
+        clamps the three quantities that have a physical limit:
+            nTran     LIMIT(0, nTran, PMPS_GVL.TRANS_SCALING_FACTOR)
+            nRate     MIN(nRate, 1000000)   -> at most 1 000 000 Hz
+            nBCRange  MIN(nBCRange, 32767)  -> at most 16#7FFF
+        neVRange and astAuxAtt are copied unchanged. The set is returned by
+        value; nothing here is written to a PMPS global.
+
+    USAGE
+        Call positionally, in declaration order, and use the returned set
+        directly or hand it to a comparison or arbitration:
+            stRequested := F_SetBeamParams(Tran, EvMask, Rate, BCRange, AuxAtt);
+        The function keeps no state and has no side effects, so it may be
+        called from any task, from production code and from test code. In this
+        library it is used by the TcUnit suites (for example
+        FB_SafeBPCompare_Test) to mint the beam-parameter sets they compare,
+        which keeps the clamps identical between the tests and production.
+        Only the constants PMPS_GVL.TRANS_SCALING_FACTOR and
+        PMPS_GVL.AUX_ATTENUATORS are read.
+
+    OBJECTIVES
+        - Give every source of a beam-parameter set (EPICS, JSON configuration,
+          test fixtures) one place where the same clamps are applied, so a
+          value that arrives by another route cannot skip them.
+        - Keep the clamps on the side of less beam: a transmission above the
+          scaling factor, a rate above 1 MHz or a beam-class mask above
+          16#7FFF is reduced, never passed through.
+        - Stay a pure function - no state, no side effects - so it is safe to
+          call from a test assertion.
+
+    UNITS AND VALID RANGES
+        nTran     Transmission as a fraction of PMPS_GVL.TRANS_SCALING_FACTOR
+                  (currently REAL#1.0), so 0.5 means 50 % transmission.
+                  Valid input 0 .. TRANS_SCALING_FACTOR. Clamped with LIMIT,
+                  so a negative input becomes 0 (no transmission) and an input
+                  above TRANS_SCALING_FACTOR becomes TRANS_SCALING_FACTOR
+                  (100 %).
+        neVRange  Bitmask of allowed photon-energy ranges, one bit per range;
+                  16#FFFF_FFFF = every range, 0 = no range allowed. Unitless.
+                  Not validated and not clamped - copied as received.
+        nRate     Pulse rate in Hz. Valid input 0 .. 1 000 000 Hz (1 MHz, the
+                  maximum LCLS-II rate); 0 Hz means no beam. Clamped from above
+                  only, so a value above 1 MHz is reduced to 1 MHz.
+        nBCRange  Bitmask of allowed beam classes, one bit per beam class
+                  (bit n = beam class n); 16#000F = classes 1..4, 0 = no class
+                  allowed. Unitless. Clamped with MIN(..., 32767), i.e. to
+                  16#7FFF: bit 15 (beam class 16, the PMPS fail-safe class)
+                  and any higher bit is dropped from the mask.
+        astAuxAtt Requested state of every auxiliary attenuator: 1-based array
+                  of PMPS_GVL.AUX_ATTENUATORS entries (currently 16), each an
+                  ST_PMPS_Attenuator with .nTran (transmission on the same
+                  TRANS_SCALING_FACTOR scale, so 0.005 = 0.5 %) and .xAttOK
+                  (attenuator status word - see the declaration comment).
+                  Copied as received; the array bounds are fixed by the input
+                  type and the entries are not validated.
+
+    HISTORY
+        2019-08-20 / Alex Wallace
+            Function created (first real commit of this repository; earlier
+            history is in pmps-dev). Transmission was then a percentage of
+            "attenuation" in an input named fAtt.
+        2020-07-07 / Alex Wallace
+            Switched the library from attenuation percentage to transmission:
+            the input became nTran and the clamp went through
+            PMPS_GVL.TRANS_SCALING_FACTOR.
+        2021-04-20 / ghalym
+            Dropped the per-pulse-energy input (fPP_mJ) and its 0..20 mJ clamp.
+        2022-11-28 / ghalym
+            Added the nBCRange beam-class range input.
+        2023-01-09 / ghalym
+            Added the 16#7FFF (32767) clamp on nBCRange.
+        2026-11-28 / Scirix Agent
+            Added this header and an inline comment for every declaration,
+            including units and valid ranges; documentation only, no behaviour
+            change (audit finding #259, convention conv_321640e095c0).
+
+    NOTE
+        - The fields this function does not take as arguments keep the
+          ST_BeamParams type defaults in the returned set: aVetoDevices all
+          FALSE (no stopper vetoes the beam), astApertures Width/Height 1E3 mm
+          (apertures effectively wide open), neV 0, nBeamClass 0,
+          nMachineMode 3, xValidToggle FALSE, xValid FALSE and nCohortInt 0.
+          A caller that cares about stoppers, apertures or machine mode must
+          set them on the result.
+        - The clamps bound a value; they do not judge the set. Whether a set is
+          acceptable for the beam that is actually running is decided further
+          downstream, by F_SafeBPCompare / F_SafeBPCompare0Rate and the
+          arbiter.
+        - nTran is clamped with LIMIT but nRate and nBCRange with MIN, because
+          UDINT and WORD cannot carry a negative value, so a lower bound on
+          them would be dead code.
+*)
+FUNCTION F_SetBeamParams : ST_BeamParams
 VAR_INPUT
+    // Requested pre-optic transmission as a fraction of PMPS_GVL.TRANS_SCALING_FACTOR (0 = no transmission, TRANS_SCALING_FACTOR = 100 %, so 0.5 = 50 %). Valid 0 .. TRANS_SCALING_FACTOR; clamped by LIMIT(0, nTran, TRANS_SCALING_FACTOR). Default 0 = no transmission.
     nTran    :    REAL := 0;
+    // Photon-energy range mask, one bit per photon-energy range (unitless; 16#FFFF_FFFF = every range, 0 = no range allowed). Copied unchanged, not validated. Consumers AND masks, so an allowed set has to be a subset of the running one.
     neVRange    :    DWORD := 0;
+    // Pulse rate in Hz, valid 0 .. 1 000 000 Hz (1 MHz = maximum LCLS-II rate); 0 Hz means no beam. Clamped from above with MIN(nRate, 1000000).
     nRate    :    UDINT := 0;
+    // Beam-class range mask, one bit per beam class - bit n = beam class n (unitless; 16#000F = classes 1..4, 0 = no class allowed). Clamped with MIN(nBCRange, 32767) = 16#7FFF, which drops bit 15 (beam class 16, the fail-safe class) and any higher bit.
     nBCRange : WORD := 0;
+    // Requested state of every auxiliary attenuator: 1-based, one entry per attenuator in PMPS_GVL.AUX_ATTENUATORS (currently 16). .nTran = transmission on the TRANS_SCALING_FACTOR scale (0.005 = 0.5 %), .xAttOK = attenuator status word (evaluated by F_AttenuatorOK: bit 0 AtTarget, bit 1 Moving, bit 2 LocalMode, bit 3 PMPSMode, bit 4 OK). Copied as received; the entries are not validated.
     astAuxAtt : ARRAY [1..PMPS_GVL.AUX_ATTENUATORS] OF ST_PMPS_Attenuator;
 END_VAR
 VAR
+    // Working set that is filled from the inputs above and returned as the function result. The fields without an input keep their ST_BeamParams defaults - see the NOTE in the header.
     BeamParams    :    ST_BeamParams;
 
 END_VAR
