@@ -4,6 +4,9 @@
     <Declaration><![CDATA[(* This function block implements simple database. Data element values are stored in the hash table.  *)
 {attribute 'no_check'}
 FUNCTION_BLOCK FB_BeamParamAssertionPool
+VAR CONSTANT
+    cDataPoolUpperBound : UDINT := PMPS_PARAM.MAX_ASSERTIONS * 3;(* Highest valid index of dataPool[] and entries[], both declared ARRAY[0..PMPS_PARAM.MAX_ASSERTIONS*3] *)
+END_VAR
 VAR_INPUT
     key         : DWORD := 0;(* Entry key: used by A_Lookup, A_Remove method, the key variable is also used by A_Add method *)
     putPosPtr    : POINTER TO T_HashTableEntry := 0;(* Hash table entry position pointer (used by A_Find, A_GetNext, A_GetPrev) *)
@@ -43,13 +46,23 @@ fbTable.A_Add( hTable := hTable, key := key, putValue := ADR(cstSafeBeam)(* we w
 IF fbTable.bOk THEN(* Success *)
     fbTable.A_GetIndexAtPosPtr( hTable := hTable, putPosPtr := getPosPtr, getValue =>indexOfElem, bOk=>bOk );(* Get array index of getPosPtr entry *)
     IF fbTable.bOk THEN(* Success *)
-        pRefPtr     := ADR( dataPool[indexOfElem] );(* Get pointer to the data element *)
+        (* Bounds check of the index returned by the hash table before it is used as an array index: this POU
+           carries the 'no_check' attribute, so the compiler does not verify array indices here.  indexOfElem is
+           an unsigned (ULINT) index, so only the upper bound 0..cDataPoolUpperBound can be violated; an
+           out-of-range value would yield a pointer outside dataPool and write putValue past the end of the array. *)
+        IF indexOfElem <= cDataPoolUpperBound THEN
+            pRefPtr     := ADR( dataPool[indexOfElem] );(* Get pointer to the data element *)
 
-        pRefPtr^ := putValue;(* copy application value *)
+            pRefPtr^ := putValue;(* copy application value *)
 
-        fbTable.A_Add( hTable := hTable, key := key, putValue := pRefPtr, bOk=>bOk );(* Assign the entry value = pointer to the data element *)
-        IF fbTable.bOk THEN(* Success *)
-            getValue := putValue;
+            fbTable.A_Add( hTable := hTable, key := key, putValue := pRefPtr, bOk=>bOk );(* Assign the entry value = pointer to the data element *)
+            IF fbTable.bOk THEN(* Success *)
+                getValue := putValue;
+            END_IF
+        ELSE
+            (* Invalid index: do not index dataPool, leave the entry at its conservative cstSafeBeam placeholder
+               and report the failure so the caller (FB_Arbiter) logs it and does not use the entry. *)
+            bOk := FALSE;
         END_IF
     END_IF
 END_IF
