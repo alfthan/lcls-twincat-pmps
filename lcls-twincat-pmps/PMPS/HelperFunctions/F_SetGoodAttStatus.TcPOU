@@ -4,15 +4,15 @@
     <Declaration><![CDATA[//Use for testing purposes to set the attenuator status to a good state
 FUNCTION F_SetGoodAttStatus : UINT
 VAR_INPUT
-    xStatus : UINT;
+    nStatus : UINT; // Attenuator status word: bit0 AtTarget, bit1 Moving, bit2 LocalMode, bit3 PMPSMode, bit4 OK
 END_VAR
 VAR
 END_VAR
 ]]></Declaration>
     <Implementation>
-      <ST><![CDATA[xStatus.0 := 1;
-xStatus.3 := 1;
-xStatus.4 := 1;]]></ST>
+      <ST><![CDATA[nStatus.0 := 1;
+nStatus.3 := 1;
+nStatus.4 := 1;]]></ST>
     </Implementation>
   </POU>
 </TcPlcObject>
