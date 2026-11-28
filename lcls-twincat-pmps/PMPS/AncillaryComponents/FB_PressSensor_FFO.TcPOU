@@ -1,7 +1,35 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <POU Name="FB_PressSensor_FFO" Id="{09ab3883-be1e-4684-be4b-0a2f4c088ff5}" SpecialFunc="None">
-    <Declaration><![CDATA[FUNCTION_BLOCK FB_PressSensor_FFO
+    <Declaration><![CDATA[(* Pressure sensor fast fault output (FFO)
+2026-11-28 SLAC Controls
+
+Purpose:
+    Watch one pressure sensor readback and drop the hardware fast fault output
+    (FFO) when the pressure reaches the configured trip point, so the beam is
+    stopped before the pressure becomes unsafe for the beamline.
+
+Usage:
+    Call one instance per pressure sensor, once per PLC cycle. Wire rPress to
+    the sensor readback [Torr], fFaultThreshold to the FAULT_SP trip point and
+    fHysteresis to the FAULT_SP_HYS release window (both setpoints are exposed
+    to EPICS by the pytmc pragmas below). Pass the shared FB_HardwareFFOutput
+    instance through io_fbFFHWO and give sDevName a unique device name so the
+    fault stays identifiable in the FFO diagnostics table.
+
+Objectives:
+    - Trip (bFAULT_OK FALSE) as soon as rPress >= fFaultThreshold.
+    - Release only after rPress has fallen fHysteresis percent below the trip
+      point, so the fault does not chatter around the threshold.
+    - Contribute the trip to the hardware fast fault chain through FB_FastFault.
+    - Log every set and clear transition through the shared logger.
+
+History:
+    2023-01-04 ghalym - POU added to the PMPS project.
+    2026-11-28 SLAC Controls - Added this header and documented every
+                                declaration (audit finding #376).
+*)
+FUNCTION_BLOCK FB_PressSensor_FFO
 VAR_INPUT
     {attribute 'pytmc' := '
         pv: Press
@@ -9,41 +37,42 @@ VAR_INPUT
         field: EGU Torr
         field: PREC 2
     '}
-    rPress : REAL;
+    rPress : REAL; // Measured sensor pressure [Torr]
     {attribute 'pytmc' := '
         pv: FAULT_SP
         io: input
         field: EGU Torr
         field: PREC 2
     '}
-    fFaultThreshold : LREAL; //Faults when the threshold is reached. Trigger value.
+    fFaultThreshold : LREAL; // Trip point [Torr]: the fault is set when rPress >= this value
     {attribute 'pytmc' := '
         pv: FAULT_SP_HYS
         io: input
         field: EGU %
         field: PREC 2
     '}
-    fHysteresis : LREAL :=1; // percentage determining how far below the trigger value the fault should be released
-    sDevName: STRING;
-    bVeto : BOOL:=FALSE; // This Fault will be will not trip the beam if the bVeto is TRUE
-    bAutoReset : BOOL:=TRUE;
+    fHysteresis : LREAL :=1; // Release window [% of fFaultThreshold, limited to 1..100]: the fault clears when rPress drops this far below the trip point
+    sDevName: STRING; // Device name handed to the fast fault for diagnostics (keep it unique per sensor)
+    bVeto : BOOL:=FALSE; // TRUE masks this fault so it cannot trip the beam; only for conditions known to be safe
+    bAutoReset : BOOL:=TRUE; // TRUE passes to FB_FastFault as i_xAutoReset: the fast fault clears itself once rPress is back below the release point
 END_VAR
 VAR_IN_OUT
-    io_fbFFHWO    :    FB_HardwareFFOutput;
+    io_fbFFHWO    :    FB_HardwareFFOutput; // Shared hardware fast fault output this fault is registered with
 END_VAR
 VAR_OUTPUT
 END_VAR
 VAR
     {attribute 'instance-path'}
     {attribute 'noinit'}
-    sPath: STRING;
-    bFAULT_OK:BOOL :=FALSE;
+    sPath: STRING; // Instance path filled in by the runtime; identifies this fault in the FFO diagnostics table
+    bFAULT_OK:BOOL :=FALSE; // TRUE while the pressure is below the trip point; FALSE (tripped) drives FB_FastFault i_xOK low
+    // Fast fault contributor for this sensor: type code 16#f700, description reported to the FFO diagnostics
     FFO    :    FB_FastFault :=(
         i_Desc := 'Fault occurs when the temprature trip point is reached',
         i_TypeCode := 16#f700);
-    rtRESET	:	R_TRIG;
-    ftFAULT	:	F_TRIG;
-    fbLogger : FB_LogMessage := (eSubsystem:=E_SubSystem.MPS, nMinTimeViolationAcceptable:=10);
+    rtRESET	:	R_TRIG; // Rising edge on FFO.i_xOK, i.e. fault condition cleared, triggers the info log entry
+    ftFAULT	:	F_TRIG; // Falling edge on FFO.i_xOK, i.e. fault condition present, triggers the critical log entry
+    fbLogger : FB_LogMessage := (eSubsystem:=E_SubSystem.MPS, nMinTimeViolationAcceptable:=10); // Shared MPS logger; up to 10 minimum-interval violations are tolerated before its circuit breaker trips
 END_VAR
 ]]></Declaration>
     <Implementation>
