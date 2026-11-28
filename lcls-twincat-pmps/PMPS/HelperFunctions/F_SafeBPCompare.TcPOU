@@ -4,6 +4,9 @@
     <Declaration><![CDATA[(*Compares BeamParam1 to BeamParam2: if the parameters of BeamParam1 are more conservative than BeamParam2
 the result will be true. *)
 // Does not consider status. Status must be evaluated elsewhere.
+// Validates the auxiliary attenuator index and the Att1/Att2 references before using them
+// and returns FALSE (i.e. not conservative) when they cannot be trusted.
+// 2026-11-28: added attenuator index bounds check and reference validation (audit finding #868).
 {attribute 'no_check'}
 FUNCTION F_SafeBPCompare : BOOL
 VAR_INPUT
@@ -38,8 +41,25 @@ xRateOK    := (BeamParam1.nRate <= BeamParam2.nRate) OR (PMPS_GVL.stCurrentBeamP
 xBCOK := ((BeamParam1.nBCRange AND BeamParam2.nBCRange) = BeamParam1.nBCRange) OR (PMPS_GVL.stCurrentBeamParameters.nMachineMode =0); //ignore in NC mode;
 
 FOR idx:=1 to PMPS_GVL.AUX_ATTENUATORS DO
+    // The configured attenuator count is not guaranteed to stay in sync with the array size
+    // declared in ST_BeamParams, and this POU runs with the 'no_check' attribute, so an
+    // out-of-range index would be silently dereferenced below. Validate the index against the
+    // real array limits first and fail safe (i.e. report 'not conservative') if it is outside.
+    IF (idx > UPPER_BOUND(BeamParam1.astAttenuators, 1))
+    OR (idx > UPPER_BOUND(BeamParam2.astAttenuators, 1)) THEN
+        F_SafeBPCompare := FALSE;
+        RETURN;
+    END_IF
+
     Att1 REF= BeamParam1.astAttenuators[idx];
     Att2 REF= BeamParam2.astAttenuators[idx];
+
+    // Never dereference an unassigned reference: fail safe (not conservative) instead.
+    IF NOT __ISVALIDREF(Att1) OR NOT __ISVALIDREF(Att2) THEN
+        F_SafeBPCompare := FALSE;
+        RETURN;
+    END_IF
+
     xAuxAttOK R= ( Att1.nTran > MIN( PMPS_GVL.TRANS_SCALING_FACTOR, ( (Att2.nTran *(PMPS_GVL.TRANS_SCALING_FACTOR+PMPS_PARAM.TRANS_MARGIN))/PMPS_GVL.TRANS_SCALING_FACTOR ) ) );
 END_FOR
 
