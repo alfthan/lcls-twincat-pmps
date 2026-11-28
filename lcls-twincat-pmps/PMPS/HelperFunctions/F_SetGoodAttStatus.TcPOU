@@ -1,10 +1,18 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <POU Name="F_SetGoodAttStatus" Id="{e6cd67bb-2bd9-4b3d-9199-950e5913b39f}" SpecialFunc="None">
-    <Declaration><![CDATA[//Use for testing purposes to set the attenuator status to a good state
+    <Declaration><![CDATA[// Use for testing purposes to set an attenuator status word to a good state.
+// Bits 0, 3 and 4 are set; every other bit is left as passed in, so pass a
+// cleared word (0) to obtain the known-good word. With bit 2 (local mode) clear
+// this is the status word F_AttenuatorOK accepts for an attenuator in PMPS mode.
+// HISTORY
+//   2020-11-18 / Alex Wallace - added for the beam-parameter tests
+//     (commit 16e0988).
+//   2026-11-28 / Scirix Agent - assign the modified word to the result so the
+//     function returns what this comment promises (audit finding #1062).
 FUNCTION F_SetGoodAttStatus : UINT
 VAR_INPUT
-    xStatus : UINT;
+    xStatus : UINT; // Attenuator status word to start from; bits 0, 3 and 4 are set on it
 END_VAR
 VAR
 END_VAR
@@ -12,7 +20,8 @@ END_VAR
     <Implementation>
       <ST><![CDATA[xStatus.0 := 1;
 xStatus.3 := 1;
-xStatus.4 := 1;]]></ST>
+xStatus.4 := 1;
+F_SetGoodAttStatus := xStatus; // Result must carry the modified status word]]></ST>
     </Implementation>
   </POU>
 </TcPlcObject>

@@ -1,17 +1,75 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <POU Name="F_InitTestBP" Id="{872b1e54-dad7-464f-b50c-ec80c2c884b3}" SpecialFunc="None">
-    <Declaration><![CDATA[// Establishes a BP set for testing.
-// Specifically this means a BP that has all the status bits set to an OK state
+    <Declaration><![CDATA[(*
+    F_InitTestBP - establishes a BP set for testing, i.e. a BP set whose status
+    bits are all in an OK state.
+
+    PURPOSE
+        Give a test a single place to obtain an ST_BeamParams that describes
+        "the beam is fine": the beam parameters handed in are returned
+        unchanged and every status-bearing member is forced to its non-faulting
+        value. A test then overrides only the members its assertion is about.
+
+    USAGE
+        stBP : ST_BeamParams;
+        stBP := F_InitTestBP(stBP);
+        The function is stateless and reads no global state, so it may be called
+        from any test without side effects. Status members the test needs to be
+        bad may still be overridden by the caller afterwards.
+
+    OBJECTIVES
+        - One definition of a healthy test BP, so tests cannot drift apart on
+          what "OK status" means.
+        - Absorb additions to ST_BeamParams in a single place.
+
+    HISTORY
+        2020-11-18 / Alex Wallace
+            Function added with an empty body in "Tests for the margin logic"
+            (commit 16e0988): BP was never read and the result was never
+            assigned, so a caller got the ST_BeamParams field defaults.
+        2026-11-28 / Scirix Agent
+            Implemented the documented status initialisation - result := BP,
+            xValid TRUE, per-attenuator xAttOK good, per-aperture xOK TRUE
+            (audit finding #1062).
+*)
 FUNCTION F_InitTestBP : ST_BeamParams
 VAR_INPUT
-    BP : ST_BeamParams;
+    BP : ST_BeamParams; // Basis BP set, a complete ST_BeamParams: nTran = pre-optic
+                        // transmission, 0..1 of full transmission; nRate = pulse rate
+                        // in Hz; neVRange = photon-energy range bit mask; nBCRange =
+                        // beam-class range bit mask; astAttenuators = per-attenuator
+                        // transmission in %; astApertures = Width/Height in mm. Only
+                        // its status members are overwritten, with the OK values
+                        // documented in the implementation.
 END_VAR
 VAR
+    stResult : ST_BeamParams; // Working copy of BP with the status bits set to OK
+    idx : UINT; // Loop index over the attenuator and aperture status arrays
 END_VAR
 ]]></Declaration>
     <Implementation>
-      <ST><![CDATA[]]></ST>
+      <ST><![CDATA[// Keep the requested beam parameters, then force every status bit to OK.
+stResult := BP;
+
+// BP set is valid (readback) / acknowledged (request).
+stResult.xValid := TRUE;
+// xValidToggle is left as it was passed in: it is the interface watchdog toggle,
+// not an OK/NOK status, so neither of its values is "good" or "bad".
+
+FOR idx := 1 TO PMPS_GVL.AUX_ATTENUATORS DO
+    // Cleared first, so a stale fault carried in by the caller cannot survive:
+    // the result is exactly the good status word F_SetGoodAttStatus builds, the
+    // one F_AttenuatorOK accepts for an attenuator in PMPS mode.
+    stResult.astAttenuators[idx].xAttOK := F_SetGoodAttStatus(0);
+END_FOR
+
+FOR idx := 1 TO PMPS_GVL.MAX_APERTURES DO
+    // Aperture OK: no error and not in motion.
+    stResult.astApertures[idx].xOK := TRUE;
+END_FOR
+
+F_InitTestBP := stResult;]]></ST>
     </Implementation>
   </POU>
 </TcPlcObject>
