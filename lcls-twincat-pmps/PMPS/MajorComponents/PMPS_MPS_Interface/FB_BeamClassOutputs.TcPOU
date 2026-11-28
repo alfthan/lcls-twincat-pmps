@@ -3,6 +3,10 @@
   <POU Name="FB_BeamClassOutputs" Id="{4a29fded-500d-49a8-af9c-1a0c32a74d5a}" SpecialFunc="None">
     <Declaration><![CDATA[(*
 Sets the beam class assertion lines for a given beam class.
+
+Beam-rate thresholds are declared once in PMPS_GVL (BC_FULL_RATE_MIN,
+BC_10HZ_RATE_MIN, BC_1HZ_RATE_MIN); the assertion-line count and the
+full-beam class value are the constants declared below.
 *)
 {attribute 'no_check'}
 FUNCTION_BLOCK FB_BeamClassOutputs
@@ -39,21 +43,20 @@ VAR
     q_BC_ASSERTION_LINES    AT    %Q*    : ARRAY [1..MAX_BEAM_CLASS_LINES] OF    BOOL;
 END_VAR
 VAR CONSTANT
-    //Limited to total of 6 digital outputs
-    MAX_BEAM_CLASS_LINES : BYTE := 8;
-    BC_1HZ : BYTE := 1;
-    BC_10HZ : BYTE := 2;
-    BC_FULL : BYTE := 16;
+    MAX_BEAM_CLASS_LINES : BYTE := 8; // Number of hardware beam-class digital outputs (channel 8 = full beam)
+    BC_1HZ : BYTE := 1; // Beam class value asserted when the requested rate reaches PMPS_GVL.BC_1HZ_RATE_MIN
+    BC_10HZ : BYTE := 2; // Beam class value asserted when the requested rate reaches PMPS_GVL.BC_10HZ_RATE_MIN
+    BC_FULL : BYTE := 16; // Full-beam class value; sets every assertion line including the full-beam channel
 END_VAR
 ]]></Declaration>
     <Implementation>
       <ST><![CDATA[
 // Determine BC
-IF BP.nRate >= 120 THEN
+IF BP.nRate >= PMPS_GVL.BC_FULL_RATE_MIN THEN
     nBeamClass := BC_FULL;
-ELSIF BP.nRate >= 10 THEN
+ELSIF BP.nRate >= PMPS_GVL.BC_10HZ_RATE_MIN THEN
     nBeamClass := BC_10HZ;
-ELSIF BP.nRate >= 1 THEN
+ELSIF BP.nRate >= PMPS_GVL.BC_1HZ_RATE_MIN THEN
     nBeamClass := BC_1HZ;
 ELSE
     nBeamClass := 0;
@@ -79,7 +82,7 @@ FOR wBeamClass:=1 TO MIN(MAX_BEAM_CLASS_LINES-1, nBeamClass) DO
     q_BC_ASSERTION_LINES[wBeamClass] := TRUE;
 END_FOR
 
-q_BC_ASSERTION_LINES[8] := nBeamClass = 16; //Set channel 8 true if BC is 16
+q_BC_ASSERTION_LINES[MAX_BEAM_CLASS_LINES] := nBeamClass = BC_FULL; //Set the full-beam channel true if BC is full beam
 
 
 // Readbacks for EPICS
@@ -91,7 +94,7 @@ epicsBitmap.3 := q_BC_ASSERTION_LINES[4];
 epicsBitmap.4 := q_BC_ASSERTION_LINES[5];
 epicsBitmap.5 := q_BC_ASSERTION_LINES[6];
 epicsBitmap.6 := q_BC_ASSERTION_LINES[7];
-epicsBitmap.7 := q_BC_ASSERTION_LINES[8];
+epicsBitmap.7 := q_BC_ASSERTION_LINES[MAX_BEAM_CLASS_LINES];
 ]]></ST>
     </Implementation>
   </POU>

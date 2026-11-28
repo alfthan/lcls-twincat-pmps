@@ -52,6 +52,13 @@ VAR_GLOBAL CONSTANT
 
     TRANS_SCALING_FACTOR : REAL := REAL#1.0; // Scaling factor for fixed-point transmission
 
+    // Beam-rate thresholds that select the beam-class / CTLS assertion lines.
+    // Rates are in Hz and match the beam-rate requests defined in E_MPSBeamRates.
+    // Declared once here so the hardware-dependent full-rate value is not repeated as a literal.
+    BC_FULL_RATE_MIN : UDINT := 120; // Minimum rate (Hz) that selects the full beam class (see BC_FULL in FB_BeamClassOutputs)
+    BC_10HZ_RATE_MIN : UDINT := 10; // Minimum rate (Hz) that selects the 10 Hz beam class
+    BC_1HZ_RATE_MIN  : UDINT := 1; // Minimum rate (Hz) that selects the 1 Hz beam class
+
     AUX_ATTENUATORS : UINT := 16; // Maximum # of attenuators in the PMPS
     MAX_VETO_DEVICES   :   UINT := 16;
     stAttenuators : ST_PMPS_Attenuator :=(nTran:=1,xAttOK:=1);
