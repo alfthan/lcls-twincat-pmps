@@ -13,6 +13,8 @@ VAR
 END_VAR
 VAR CONSTANT
     OvrdTime : TIME := T#2s;
+    cTestTimeout : TIME := T#30s; // Max time allowed for the system time to become valid and the override to activate and expire
+    cMaxCycleCount : DWORD := 3000; // Max cycles allowed, secondary guard (30 s at a 10 ms test task cycle)
 END_VAR
 ]]></Declaration>
     <Implementation>
@@ -114,9 +116,26 @@ VAR_INST
 //seconds:ULINT;
     specificLocalTimeToFileTime : FB_TzSpecificLocalTimeToFileTime;
     fileTime: T_FILETIME;
+
+    // Timeout guard: this test waits for the system clock to become valid and for a timed
+    // override to activate and then expire. Neither is guaranteed, so the wait is bounded.
+    fbTimeout : TON; // Bounds the whole override activate/expire wait, PT set from cTestTimeout each cycle
+    nCycleCount : DWORD; // Cycles spent in this test, reported when the timeout expires
+    bTestAborted : BOOL := FALSE; // Set once the timeout expired, so the test body stops running
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[TEST('FFVetoAndNextFault');
+        <ST><![CDATA[// Test that a fast fault override activates, permits beam, and then expires.
+//
+// The wait for a valid system time and for the override to activate and expire is bounded
+// by cTestTimeout / cMaxCycleCount. On expiry the test is failed, the override request is
+// released and the test is finished, so a clock that never syncs or an override that never
+// expires cannot hang the test suite.
+IF bTestAborted THEN
+    // A previous cycle already failed and finished this test - nothing left to do.
+    RETURN;
+END_IF
+
+TEST('FFVetoAndNextFault');
 fbTime();
 
 // I noticed something weird going on with the PEWatcher on the L line. It was faulted, and the fast fault
@@ -147,6 +166,35 @@ IF  FirstPass  THEN
 
 FirstPass := FALSE;
 
+END_IF
+
+
+// Bound the wait: this test needs the system time to become valid and a timed override to
+// activate and then expire. Neither is guaranteed (unsynchronised clock, override that never
+// expires), so give up, clean up and fail the test instead of hanging the test suite.
+nCycleCount := nCycleCount + 1;
+fbTimeout(IN := TRUE, PT := cTestTimeout);
+
+IF fbTimeout.Q OR nCycleCount >= cMaxCycleCount THEN
+
+    bTestAborted := TRUE;
+
+    AssertTrue(FALSE,
+        CONCAT('FFVetoAndNextFault timed out after ',
+            CONCAT(DWORD_TO_STRING(nCycleCount), ' cycles waiting for override activation/expiry')));
+
+    // Clean up: drop any pending override request and leave the fast fault tripped.
+    IF __ISVALIDREF(rFF) THEN
+        WRITE_PROTECTED_BOOL(ADR(rFF.Ovrd.Activate), FALSE);
+        WRITE_PROTECTED_BOOL(ADR(rFF.Ovrd.Deactivate), TRUE);
+    END_IF
+
+    fbFF(io_fbFFHWO := fbFFO, i_xOK := FALSE);
+    fbFFO.ExecuteNoLog();
+
+    TEST_FINISHED_NAMED('FFVetoAndNextFault');
+
+    RETURN;
 END_IF
 
 
