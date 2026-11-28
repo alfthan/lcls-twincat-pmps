@@ -2,13 +2,18 @@
 <TcPlcObject Version="1.1.0.1">
   <DUT Name="ST_ReactiveParams" Id="{1698e45e-a4b7-4f88-a75d-0454397cae8b}">
     <Declaration><![CDATA[TYPE ST_ReactiveParams :
+// Non-beam (reactive) parameters for a PMPS state, loaded from the state database together with the beam parameters
 STRUCT
+    // Reactive temperature threshold for this state, read from the PMPS database key "reactive_temp"
+    // Units: degrees Celsius (pytmc EGU "C")
     {attribute 'pytmc' := 'pv: TempSP
             io: i
             field: PREC 2;
             field: EGU "C";
         '}
     nTempSP: REAL;
+    // Reactive pressure threshold for this state, read from the PMPS database key "reactive_pressure"
+    // Units: Torr (pytmc EGU "TORR")
     {attribute 'pytmc' := 'pv: PressSP
             io: i
             field: PREC 2;
