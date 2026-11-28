@@ -1,9 +1,23 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <POU Name="FB_JsonDocToSafeBP" Id="{be21f50f-6e98-4ce2-92ee-0a1b1ced09d9}" SpecialFunc="None">
-    <Declaration><![CDATA[FUNCTION_BLOCK FB_JsonDocToSafeBP
+    <Declaration><![CDATA[(* FB_JsonDocToSafeBP
+Loads one device's safe beam parameters out of a PMPS JSON document into the
+caller-supplied state array and reports the outcome through bBusy/bError.
+
+Command handshake: parsing starts on the rising edge of bExecute. bError is
+latched - re-triggering the command never dismisses it. It clears only when the
+dedicated acknowledge input i_xReset is pulsed while the block is idle.
+
+History:
+2026-11-28 Latched error and dedicated acknowledge input (audit finding 1125 /app/namespaces/d6f73763-31bc-4bea-8f49-b5906058e129/
+           conv_4131eec9c934): removed the bError/nErrId/sErrMsg clear on the
+           bExecute rising edge, added i_xReset.
+*)
+FUNCTION_BLOCK FB_JsonDocToSafeBP
 VAR_INPUT
     bExecute             : BOOL; //Rising Edge
+    i_xReset             : BOOL; //Dedicated acknowledge/reset: clears the latched bError once the block is idle
     jsonDoc 		: SJsonValue;
     sDeviceName : STRING;
 END_VAR
@@ -12,7 +26,7 @@ VAR_OUTPUT
     bHasAllStates		: BOOL;
     bHasAllParameters :BOOL := TRUE;
     bBusy                : BOOL;
-    bError               : BOOL;
+    bError               : BOOL; //Latched error: set by any fault, cleared only by i_xReset
     nErrId               : UDINT;
     sErrMsg				 :STRING;
 END_VAR
@@ -33,6 +47,8 @@ VAR
     index: DINT;
     nStateCount:DINT;
     RisingEdge           : R_TRIG;
+    rtReset              : R_TRIG; //Rising edge of the i_xReset acknowledge input
+    xErrorLatched        : BOOL; //Latched error state, bError mirrors it
 
     (*Logger*)
     tNewMessage : R_TRIG;
@@ -46,15 +62,26 @@ END_VAR
 ]]></Declaration>
     <Implementation>
       <ST><![CDATA[(* Retrieve JSON content *)
+
+// Acknowledge the latched error. Evaluated before the CASE so a fault raised in this
+// scan can never be cleared in the same scan, and only from the known-safe idle state
+// (no load in progress). bError is re-derived from the latch every scan, so a new
+// bExecute rising edge cannot dismiss an unacknowledged fault.
+rtReset(CLK:=i_xReset);
+IF rtReset.Q AND xErrorLatched AND NOT bBusy AND (Step = 0) THEN
+    xErrorLatched := FALSE;
+    nErrId := 0;
+    sErrMsg := '';
+    fbLogger(sMsg:='Parsing Json DOC error acknowledged.', eSevr:=TcEventSeverity.Info);
+END_IF
+bError := xErrorLatched;
+
 RisingEdge(CLK:=bExecute);
 
 CASE Step OF
     0:     (* Idle state *)
           IF RisingEdge.Q THEN
                bBusy := TRUE;
-               bError:= FALSE;
-               nErrId:=0;
-               sErrMsg :='';
                Step := 20;
                fbLogger(sMsg:='Start Parsing Json DOC.', eSevr:=TcEventSeverity.Info);
           END_IF
@@ -135,24 +162,31 @@ CASE Step OF
          bExecute:= FALSE;
         bBusy:=FALSE;
         Step := 0;
-        FFO.i_xOK := TRUE;
 END_CASE
 
 
 //Fault in error state
 IF(Step>=900) THEN
-    FFO.i_xOK := FALSE;
     bBusy:=FALSE;
     Step:=0;
 END_IF
+
+//Latch every fault raised this scan (error states, M_LoadSafeBP, ...). Nothing in
+//this block clears it except the acknowledge block above.
+IF bError THEN
+    xErrorLatched := TRUE;
+END_IF
+bError := xErrorLatched;
 ACT_FFO();
 ACT_LOGGER();]]></ST>
     </Implementation>
     <Action Name="ACT_FFO" Id="{6e9a2bc2-3984-4ee7-a4d8-2cc5196ce941}">
       <Implementation>
         <ST><![CDATA[(*FAST FAULT*)
-FFO(i_xOK := ,
-    i_xReset := ,
+// i_xOK mirrors the latched error, so re-commanding the block cannot dismiss the fast
+// fault; it is released only once i_xReset acknowledges with the fault condition clear.
+FFO(i_xOK := NOT xErrorLatched,
+    i_xReset := i_xReset,
     i_xAutoReset :=TRUE,
     i_DevName := sDeviceName,
     io_fbFFHWO := io_fbFFHWO);]]></ST>
