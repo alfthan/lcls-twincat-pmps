@@ -203,7 +203,7 @@
     <Compile Include="HelperFunctions\F_ValidReqID.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="HelperFunctions\PE_Ranges.TcPOU">
+    <Compile Include="HelperFunctions\FB_PE_Ranges.TcPOU">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="HelperFunctions\F_AttenuatorOK.TcPOU">
