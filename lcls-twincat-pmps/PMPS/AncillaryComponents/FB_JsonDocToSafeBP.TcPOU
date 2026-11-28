@@ -167,18 +167,88 @@ IF tNewMessage.Q THEN fbLogger(sMsg:= sErrMsg, eSevr:=TcEventSeverity.Critical);
       </Implementation>
     </Action>
     <Method Name="M_LoadSafeBP" Id="{5023fc20-80a3-4a48-bcd3-d8289f8af669}">
-      <Declaration><![CDATA[METHOD M_LoadSafeBP : BOOL
+      <Declaration><![CDATA[(*
+    M_LoadSafeBP - copy the beam and reactive parameters of one device state out of the JSON DOM.
+
+    Purpose:
+        Read the state object named by sStateName inside the parent's jsonProp (the device
+        sub-object that FB_JsonDocToSafeBP step 20 located in jsonDoc) and store its
+        parameters in the parent's arrStates[Index], so that PMPS arbitration can later use
+        the beam parameters that belong to the state the beamline declares active:
+            stBeamParams.nTran              <- 'nTran'            pre-optic transmission, 0..1
+            stBeamParams.nRate              <- 'nRate'            pulse rate, Hz
+            stBeamParams.neVRange           <- 'neVRange'         32-char hex string -> 32-bit eV range mask
+            stBeamParams.nBCRange           <- 'nBeamClassRange'  15-char hex string -> 15-bit beam class mask
+            stBeamParams.astApertures[nAperture].Height <- 'ap_ygap'  vertical gap, mm
+            stBeamParams.astApertures[nAperture].Width  <- 'ap_xgap'  horizontal gap, mm
+            stBeamParams.nRequestAssertionID <- 'id'             assertion/transition ID, integer
+            stReactiveParams.nTempSP        <- 'reactive_temp'     temperature threshold, deg C
+            stReactiveParams.nPressSP       <- 'reactive_pressure' pressure threshold, Torr
+        Every numeric field except 'id' is carried as a JSON string and converted here with
+        TO_REAL/TO_UDINT or by rebuilding a bitmask one hex nibble at a time; a state counts
+        as loaded only when all of these fields were found, which is what
+        arrStates[Index].bBeamParamsLoaded records.
+
+    Usage:
+        Called from FB_JsonDocToSafeBP step 23 only, once per arrStates entry whose
+        sPmpsState is neither '' nor 'Invalid':
+            FOR Index := LOWER_BOUND(arrStates, 1) TO UPPER_BOUND(arrStates, 1) DO
+                IF NOT M_LoadSafeBP(arrStates[Index].sPmpsState, Index) THEN ... END_IF
+            END_FOR
+        It is a helper of that state machine rather than a standalone API: it needs the
+        parent's fbJson and jsonProp to be valid (set up in steps 20/21) and Index to address
+        an element of the parent's arrStates. FB_MotionReadPMPSDBND in lcls-twincat-motion is
+        the production caller of the parent block. One call does all of the work; the method
+        never waits, so it costs a single PLC cycle per state.
+
+    Returns:
+        TRUE  - every field listed above was present and usable, and arrStates[Index] now
+                holds a complete state.
+        FALSE - at least one field was missing or had an unexpected length. Aperture gaps are
+                still written when the aperture name resolved, and
+                arrStates[Index].bBeamParamsLoaded stays FALSE. The parent's bError, nErrId
+                (900+Step, i.e. 923 in the current sequence) and sErrMsg are set and the
+                failure is logged at Critical severity; the caller then moves the sequence
+                into its error state, which drops the fast fault.
+
+    Objectives:
+        - Keep the JSON vocabulary in one place: the member names ('nTran',
+          'reactive_temp', ...) and the string-encoded number format live here, so the rest
+          of the PMPS library only ever sees ST_DbStateParams.
+        - Never accept a partial state silently: a missing field clears the parent's
+          bHasAllParameters and leaves the loaded flag FALSE, so arbitration cannot treat a
+          half-parsed state as a valid beam-parameter request.
+
+    History:
+        2022-11-05  ghalym        Added with the JSON reader/DOM parser split.
+        2022-11-23  Zachary Lentz Read 'id' with GetInt - it is an integer in the JSON doc.
+        2023-01-04  ghalym        Beam-class range / machine-mode rework.
+        2024-01-26  ghalym        Added the reactive temperature and pressure setpoints.
+        2024-01-29  ghalym        Reformatted by pre-commit.
+        2026-11-28  Scirix agent  Added this header and the per-declaration comments; no
+                                  functional change (audit finding #233,
+                                  convention conv_321640e095c0).
+
+    Note:
+        The aperture name is resolved through L_Apertures ('SL1L0', 'SL2L0') or K_Apertures
+        ('SL1K0', 'SL2K0') depending on the build. Any other name leaves nAperture at -1 and
+        the gaps are skipped without an error, so an unmapped aperture name is not detected
+        here. 'beamline', 'name', 'damage_limit' and 'notes' exist in the database but are
+        not consumed by this method yet - the beam-parameter read is still incomplete (see
+        the TODO at the end of the body).
+*)
+METHOD M_LoadSafeBP : BOOL // Loads one device state's beam + reactive parameters from jsonProp into arrStates[Index]; TRUE when every field was present
 VAR_INPUT
-    sStateName : STRING;
-    Index:DINT;
+    sStateName : STRING; // JSON member name of the state to load - the parent's arrStates[Index].sPmpsState, e.g. 'target1'
+    Index:DINT; // Index of the parent's arrStates element that receives the parameters (LOWER_BOUND..UPPER_BOUND of the parent's arrStates); shadows the parent's Index variable
 END_VAR
 VAR
     //bHasAllParameters : BOOL := TRUE;
-    sAperture:STRING;
-    nAperture:INT := -1;
-    sEV:STRING;
-    sBC:STRING;
-    nIndex:INT;
+    sAperture:STRING; // 'ap_name' member of the state, e.g. 'SL1L0'; mapped to an aperture slot below
+    nAperture:INT := -1; // Aperture slot in stBeamParams.astApertures; -1 = name not recognised, gaps are skipped
+    sEV:STRING; // 'neVRange' hex string, 32 chars, one nibble per eV range; first char ends up in the MSB
+    sBC:STRING; // 'nBeamClassRange' hex string, 15 chars, one nibble per beam class; first char ends up in the MSB
+    nIndex:INT; // Bit-position counter used to rebuild the eV mask (0..PMPS_GVL.g_cBoundaries) and the beam class mask (0..14)
 END_VAR
 ]]></Declaration>
       <Implementation>
