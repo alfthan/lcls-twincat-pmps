@@ -21,8 +21,8 @@ VAR
         io: i
      '}
     epicsDataPool    : ARRAY[1..PMPS_PARAM.MAX_ASSERTIONS] OF ST_BP_ArbInternal;(* Structured data element pool for display in EPICS*)
-    dataPool    : ARRAY[0..PMPS_PARAM.MAX_ASSERTIONS*3] OF ST_BP_ArbInternal;(* Structured data element pool *)
-    entries        : ARRAY[0..PMPS_PARAM.MAX_ASSERTIONS*3] OF T_HashTableEntry;(* Max. number of hash table entries. The value of table entry = 32 bit integer (pointer to dataPool-array-entry) *)
+    dataPool    : ARRAY[0..PMPS_PARAM.MAX_ASSERTIONS_POOL_SIZE] OF ST_BP_ArbInternal;(* Structured data element pool. Same bound as entries: the hash table returns indices into this array *)
+    entries        : ARRAY[0..PMPS_PARAM.MAX_ASSERTIONS_POOL_SIZE] OF T_HashTableEntry;(* Max. number of hash table entries. The value of table entry = 32 bit integer (pointer to dataPool-array-entry). Must use the same bound as dataPool *)
     fbTable     : FB_HashTableCtrl;(* basic hash table control function block *)
     hTable         : T_HHASHTABLE;(* hash table handle *)
     pRefPtr        : POINTER TO ST_BP_ArbInternal := 0;

@@ -5,6 +5,7 @@
 VAR_GLOBAL CONSTANT
     MAX_FAST_FAULTS	:	UINT := 50; // Max fast faults for an FFO
     MAX_ASSERTIONS    :    UDINT := 20; //Maximum number of BP requests in the arbiter
+    MAX_ASSERTIONS_POOL_SIZE : UDINT := MAX_ASSERTIONS * 3; //Capacity of the assertion data pool and of the hash table entry array. Both must stay the same size: the hash table returns dataPool indices, so a shared bound prevents an index overflow. Change the factor here only, never at the array bounds.
     TRANS_MARGIN : REAL := REAL#0.20; // Allowed % margin above requested transmission level in SafeBPCompare (0.2000 = 20deci% default). Note: change this value if scaling factor changes.
 END_VAR]]></Declaration>
   </GVL>
