@@ -1,9 +1,71 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <POU Name="F_ValidReqID" Id="{da241a71-d251-4194-bb1e-c62816f4a193}" SpecialFunc="None">
-    <Declaration><![CDATA[FUNCTION F_ValidReqID : BOOL
+    <Declaration><![CDATA[(*
+    F_ValidReqID - may this request/assertion ID be used as an assertion key?
+
+    PURPOSE
+        Decide whether a request/assertion ID handed to the beam-parameter
+        transition manager (BPTM) is a usable key for the arbiter's assertion
+        pool. Exactly two values of the DWORD input are rejected:
+            0        - no ID assigned (the BPTM input defaults to 0)
+            16#FFFFFFFF (PMPS_GVL.EXCLUDED_ASSERTION_ID)
+                     - reserved sentinel that must never match an assertion
+        Every other DWORD value is accepted.
+
+    USAGE
+        Called from the SetNewTarget action of BeamParameterTransitionManager,
+        on both IDs it is about to install:
+            IF F_ValidReqID(i_nRequestedAssertionID) AND
+                F_ValidReqID(i_TransitionAssertionID) THEN
+        and again in the failure branch to pick the error code
+        (PMPS_CODES.BadTargetID for the requested ID, PMPS_CODES.BadTransID
+        for the transition ID). Both BPTM inputs are UDINT and are passed
+        unchanged to the DWORD input below.
+        The function is pure - it reads only its input and that one GVL
+        constant, keeps no state and has no side effects - so it may be called
+        from any task, from production code and from test code.
+
+    OBJECTIVES
+        - Give "a valid request ID" one definition, so the exclusion of 0 and
+          of the sentinel is written once instead of at every call site.
+        - Keep both sentinel values out of the arbiter: FB_Arbiter.AddRequest
+          refuses the same two IDs, so a caller that skips this check cannot
+          install a request the arbiter would then be unable to look up.
+        - Turn a bad ID into a distinct, logged error at the BPTM instead of a
+          request that silently never asserts.
+
+    RETURNS
+        BOOL - TRUE when ReqID may be used as an assertion ID, FALSE for one of
+        the two rejected values. FALSE is the safe answer: the caller raises a
+        fault instead of requesting beam.
+
+    NOTES
+        - Only the two sentinel values are rejected here. Whether an ID is
+          already present in the pool is a separate question, asked with
+          FB_Arbiter.CheckRequestInPool; uniqueness stays the caller's job.
+        - IDs are compared as unsigned 32-bit values; nothing in this function
+          range-checks, hashes or stores the ID.
+
+    HISTORY
+        2020-08-18 / Alex Wallace
+            Function added with the BPTM change that made the transition
+            manager reject bad transition IDs (commit 1472f04).
+        2024-01-29 / ghalym
+            Reformatted by pre-commit; logic unchanged (commit 1335761).
+        2026-09-16 / Yann Stephen Mandza
+            XAE ProductVersion attribute removed from the TcPlcObject element
+            (commit f77073f).
+        2026-11-28 / Scirix Agent
+            Added this header and the ReqID comment; documentation only, no
+            behaviour change (audit finding #270, conv_321640e095c0).
+*)
+FUNCTION F_ValidReqID : BOOL
 VAR_INPUT
-    ReqID : DWORD;
+    ReqID : DWORD; // Request/assertion ID to validate: the key the caller wants to put in
+                   // the arbiter's assertion pool. No units. 0 (no ID assigned) and
+                   // 16#FFFFFFFF (PMPS_GVL.EXCLUDED_ASSERTION_ID, the never-matches
+                   // sentinel) are rejected; any other DWORD value is accepted.
 END_VAR
 VAR
 END_VAR
