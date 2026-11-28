@@ -6,6 +6,12 @@ VAR_GLOBAL CONSTANT
     MAX_FAST_FAULTS	:	UINT := 50; // Max fast faults for an FFO
     MAX_ASSERTIONS    :    UDINT := 20; //Maximum number of BP requests in the arbiter
     TRANS_MARGIN : REAL := REAL#0.20; // Allowed % margin above requested transmission level in SafeBPCompare (0.2000 = 20deci% default). Note: change this value if scaling factor changes.
+
+    // Ancillary sensor fast-fault trip configuration
+    FFO_SENSOR_TYPE_CODE : UINT := 16#F700; // Fast-fault class code reported by the ancillary sensor trip blocks (e.g. FB_TempSensor_FFO)
+    HYSTERESIS_MIN_PCT : LREAL := 1; // Lower bound for a fault hysteresis, in % of the trip threshold (0 % would chatter at the threshold)
+    HYSTERESIS_MAX_PCT : LREAL := 100; // Upper bound for a fault hysteresis, in % of the trip threshold; also the % full scale used to turn a hysteresis percentage into a fraction
+    LOGGER_MIN_TIME_VIOLATIONS : INT := 10; // Min-time violations a project logger (FB_LogMessage) tolerates before its circuit breaker trips
 END_VAR]]></Declaration>
   </GVL>
 </TcPlcObject>
