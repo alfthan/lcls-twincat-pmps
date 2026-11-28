@@ -1,18 +1,76 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <POU Name="F_SetGoodAttStatus" Id="{e6cd67bb-2bd9-4b3d-9199-950e5913b39f}" SpecialFunc="None">
-    <Declaration><![CDATA[//Use for testing purposes to set the attenuator status to a good state
+    <Declaration><![CDATA[(*
+    F_SetGoodAttStatus - returns an attenuator status word forced into the
+    "good" state used by tests.
+
+    PURPOSE
+        Test helper for PMPS test fixtures. Starting from the attenuator status
+        word passed in xStatus, it sets the bits that describe a healthy,
+        PMPS-governed attenuator, so code that judges attenuator health (for
+        example F_AttenuatorOK) sees the attenuator as safe and stable.
+
+    BIT LAYOUT
+        The bit layout is the one declared in ST_AttenuatorStatus:
+            bit 0  AtTarget : attenuator has reached its requested transmission
+            bit 1  Moving   : attenuator is travelling to a new transmission
+            bit 2  LocalMode: attenuator ignores PMPS requests, follows a local
+                              setpoint
+            bit 3  PMPSMode : attenuator takes setpoints only from PMPS
+            bit 4  OK       : no attenuator error, status is stable
+            bit 5  Toggle   : unused
+            bit 6  Include  : consider this device's status
+
+        This helper forces bit 0 (AtTarget), bit 3 (PMPSMode) and bit 4 (OK) to
+        1 and leaves every other bit of the supplied word unchanged. Starting
+        from a zeroed word the result reads "at target, in PMPS mode, no
+        errors", for which F_AttenuatorOK returns TRUE.
+
+    USAGE
+        For test code only, never for production logic:
+            stAttenuator.AttStatus := F_SetGoodAttStatus(stAttenuator.AttStatus);
+
+        The modified status word is returned through the function name.
+        xStatus is a by-value VAR_INPUT and is not modified by this function.
+
+    OBJECTIVES
+        - Keep the definition of a "good" attenuator status word in one place,
+          so a change of bit layout is made in a single function.
+        - Set the good bits on top of the caller's word, so all other bits
+          (Moving, LocalMode, Include, ...) pass through unchanged.
+        - Follow standard TwinCAT function structure: inputs are read-only and
+          the result is returned through the function name only.
+
+    HISTORY
+        2020-11-18 / Alex Wallace
+            Function created with the "Tests for the margin logic" change.
+        2026-11-28 / Scirix Agent
+            Fixed function structure: the result is now assigned from xStatus
+            before the good bits are set, so the helper returns the modified
+            status word instead of writing to its by-value input and always
+            returning 0 (audit finding #1135).
+*)
 FUNCTION F_SetGoodAttStatus : UINT
 VAR_INPUT
-    xStatus : UINT;
+    xStatus : UINT; // Attenuator status word (ST_AttenuatorStatus layout); bits 0 AtTarget, 3 PMPSMode and 4 OK are forced to 1, all other bits pass through unchanged
 END_VAR
 VAR
+    nStatus : UINT; // Working copy of xStatus in which the good bits are set; assigned to the function result at the end
 END_VAR
 ]]></Declaration>
     <Implementation>
-      <ST><![CDATA[xStatus.0 := 1;
-xStatus.3 := 1;
-xStatus.4 := 1;]]></ST>
+      <ST><![CDATA[// Build the result on a local copy of the status word: xStatus is a
+// by-value VAR_INPUT and is only ever read here.
+nStatus := xStatus;
+
+nStatus.0 := TRUE; // AtTarget: at the requested transmission
+nStatus.3 := TRUE; // PMPSMode: attenuator follows PMPS setpoints
+nStatus.4 := TRUE; // OK: no attenuator error
+
+// Standard function structure: the result is returned through the function
+// name, never through an input.
+F_SetGoodAttStatus := nStatus;]]></ST>
     </Implementation>
   </POU>
 </TcPlcObject>
