@@ -1,7 +1,10 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <POU Name="F_SetGoodAttStatus" Id="{e6cd67bb-2bd9-4b3d-9199-950e5913b39f}" SpecialFunc="None">
-    <Declaration><![CDATA[//Use for testing purposes to set the attenuator status to a good state
+    <Declaration><![CDATA[// Use for testing purposes to set the attenuator status to a good state.
+// Turns on the AtTarget (bit 0), PMPSMode (bit 3) and OK (bit 4) bits of the
+// attenuator status word. The bit positions are named as masks in PMPS_PARAM,
+// matching the bit layout documented by ST_AttenuatorStatus.
 FUNCTION F_SetGoodAttStatus : UINT
 VAR_INPUT
     xStatus : UINT;
@@ -10,9 +13,9 @@ VAR
 END_VAR
 ]]></Declaration>
     <Implementation>
-      <ST><![CDATA[xStatus.0 := 1;
-xStatus.3 := 1;
-xStatus.4 := 1;]]></ST>
+      <ST><![CDATA[xStatus := xStatus OR PMPS_PARAM.ATT_STATUS_AT_TARGET_MASK; // Bit 0: attenuator is at its requested transmission
+xStatus := xStatus OR PMPS_PARAM.ATT_STATUS_PMPS_MODE_MASK; // Bit 3: PMPS mode, only PMPS setpoints are followed
+xStatus := xStatus OR PMPS_PARAM.ATT_STATUS_OK_MASK; // Bit 4: no errors and attenuator is stable]]></ST>
     </Implementation>
   </POU>
 </TcPlcObject>
