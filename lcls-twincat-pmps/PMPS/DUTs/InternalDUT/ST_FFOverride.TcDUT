@@ -7,56 +7,56 @@ STRUCT
         pv: Duration
         io: o
      '}
-    Duration : DINT; // DINT to be compatible with EPICS
+    nDuration : DINT; // DINT to be compatible with EPICS
 
     {attribute 'pytmc' := '
         pv: Expiration
         io: o
      '}
-    Expiration : DINT; // DINT to be compatible with EPICS
+    nExpiration : DINT; // DINT to be compatible with EPICS
 
     {attribute 'pytmc' := '
         pv: StartDT
         io: o
      '}
-    StartDT : DINT; // DINT to be compatible with EPICS
+    nStartDT : DINT; // DINT to be compatible with EPICS
 
     {attribute 'pytmc' := '
         pv: Activate
         io: o
      '}
-    Activate : BOOL;
+    bActivate : BOOL;
 
     {attribute 'pytmc' := '
         pv: Deactivate
         io: o
      '}
-    Deactivate : BOOL;
+    bDeactivate : BOOL;
 
     {attribute 'pytmc' := '
         pv: ElapsedTime
         io: i
      '}
-    ElapsedTime : DINT; // DINT to be compatible with EPICS
+    nElapsedTime : DINT; // DINT to be compatible with EPICS
 
     {attribute 'pytmc' := '
         pv: RemainingTime
         io: i
      '}
-    RemainingTime : DINT; // DINT to be compatible with EPICS
+    nRemainingTime : DINT; // DINT to be compatible with EPICS
 
     {attribute 'pytmc' := '
         pv: Active
         io: i
      '}
-    Active: BOOL;
+    bActive: BOOL;
 
-    Timer    :   TP;
-    OvrdActLogAck : BOOL;
-    OvrdExpLogAck : BOOL;
+    fbTimer    :   TP;
+    bOvrdActLogAck : BOOL;
+    bOvrdExpLogAck : BOOL;
 
-    tOvrdActivate : R_TRIG;
-    tOvrdExpiring  : F_TRIG;
+    rtOvrdActivate : R_TRIG; // Rising edge of bActive, latches the activation log flag
+    ftOvrdExpiring : F_TRIG; // Falling edge of bActive, latches the expiry log flag
 END_STRUCT
 END_TYPE
 ]]></Declaration>

@@ -128,34 +128,34 @@ FOR EvalIdx := 1 TO FF_ARRAY_UPPER_BOUND DO
         CONTINUE;
     ELSE
         // Veto timer
-        IF FF.Ovrd.Deactivate THEN
-            FF.Ovrd.Timer.PT := T#0s; // Only needs to be set zero for one cycle
-        ELSIF FF.Ovrd.Activate THEN
-            FF.Ovrd.StartDT:= TO_DINT(TO_DT(SystemTime_TO_DT(fbTime_to_UTC.out)));
-            IF (FF.Ovrd.StartDT < FF.Ovrd.Expiration) THEN
-                FF.Ovrd.Expiration:= LIMIT(0,FF.Ovrd.Expiration, FF.Ovrd.StartDT+MaxTime );
-                   FF.Ovrd.Timer.PT := TO_DT(FF.Ovrd.Expiration)- SystemTime_TO_DT(fbTime_to_UTC.out);
+        IF FF.Ovrd.bDeactivate THEN
+            FF.Ovrd.fbTimer.PT := T#0s; // Only needs to be set zero for one cycle
+        ELSIF FF.Ovrd.bActivate THEN
+            FF.Ovrd.nStartDT:= TO_DINT(TO_DT(SystemTime_TO_DT(fbTime_to_UTC.out)));
+            IF (FF.Ovrd.nStartDT < FF.Ovrd.nExpiration) THEN
+                FF.Ovrd.nExpiration:= LIMIT(0,FF.Ovrd.nExpiration, FF.Ovrd.nStartDT+MaxTime );
+                   FF.Ovrd.fbTimer.PT := TO_DT(FF.Ovrd.nExpiration)- SystemTime_TO_DT(fbTime_to_UTC.out);
             END_IF
         END_IF
 
         // UDINT conversions for ESS module compatibility.
-        FF.Ovrd.Timer(
-            IN := FF.Ovrd.Activate, // Rising edge activated
-            Q => FF.Ovrd.Active);
+        FF.Ovrd.fbTimer(
+            IN := FF.Ovrd.bActivate, // Rising edge activated
+            Q => FF.Ovrd.bActive);
 
-        FF.Ovrd.tOvrdActivate(CLK:=FF.Ovrd.Active);
-        FF.Ovrd.OvrdActLogAck S= FF.Ovrd.tOvrdActivate.Q;
+        FF.Ovrd.rtOvrdActivate(CLK:=FF.Ovrd.bActive);
+        FF.Ovrd.bOvrdActLogAck S= FF.Ovrd.rtOvrdActivate.Q;
 
-        FF.Ovrd.tOvrdExpiring(CLK:=FF.Ovrd.Active);
-        FF.Ovrd.OvrdExpLogAck S= FF.Ovrd.tOvrdExpiring.Q;
+        FF.Ovrd.ftOvrdExpiring(CLK:=FF.Ovrd.bActive);
+        FF.Ovrd.bOvrdExpLogAck S= FF.Ovrd.ftOvrdExpiring.Q;
 
-        FF.Ovrd.ElapsedTime := TIME_TO_UDINT(FF.Ovrd.Timer.ET);
+        FF.Ovrd.nElapsedTime := TIME_TO_UDINT(FF.Ovrd.fbTimer.ET);
 
-        FF.Ovrd.RemainingTime := MAX(0, TO_DINT(FF.Ovrd.Timer.PT) - FF.Ovrd.ElapsedTime);
+        FF.Ovrd.nRemainingTime := MAX(0, TO_DINT(FF.Ovrd.fbTimer.PT) - FF.Ovrd.nElapsedTime);
 
         // Clear pushbuttons
-        FF.Ovrd.Activate := FALSE;
-        FF.Ovrd.Deactivate := FALSE;
+        FF.Ovrd.bActivate := FALSE;
+        FF.Ovrd.bDeactivate := FALSE;
 
     END_IF
 END_FOR
@@ -210,24 +210,24 @@ FOR logIdx := 1 to FF_ARRAY_UPPER_BOUND do
             FF.FaultAck := FALSE;
         END_IF
 
-        IF FF.Ovrd.OvrdActLogAck THEN
+        IF FF.Ovrd.bOvrdActLogAck THEN
 
             pmpsTypeCode := 2;
             FormulateLogJson(FF);
 
             fbLogger(sMsg := 'Override activated', eSevr:=TcEventSeverity.Warning);
 
-            FF.Ovrd.OvrdActLogAck := FALSE;
+            FF.Ovrd.bOvrdActLogAck := FALSE;
         END_IF
 
-        IF FF.Ovrd.OvrdExpLogAck THEN
+        IF FF.Ovrd.bOvrdExpLogAck THEN
 
             pmpsTypeCode := 3;
             FormulateLogJson(FF);
 
             fbLogger(sMsg := 'Override released', eSevr:=TcEventSeverity.Warning);
 
-            FF.Ovrd.OvrdExpLogAck := FALSE;
+            FF.Ovrd.bOvrdExpLogAck := FALSE;
         END_IF
 
         IF FF.ClearAck THEN
@@ -324,7 +324,7 @@ stFF.rtReset(CLK:=stFF.Reset (*epics*) OR Reset (*from other PLC logic *) );
 stFF.Reset R= stFF.rtReset.Q;
 stFF.bsFF(SET := stFF.rtReset.Q OR stFF.Info.AutoReset, RESET1:= NOT OK);
 
-BeamPermitted := stFF.bsFF.Q1 OR stFF.Ovrd.Active OR (i_xVeto AND stFF.Info.Vetoable);
+BeamPermitted := stFF.bsFF.Q1 OR stFF.Ovrd.bActive OR (i_xVeto AND stFF.Info.Vetoable);
 
 // Fault generation
 IF NOT BeamPermitted THEN
