@@ -212,7 +212,7 @@
     <Compile Include="HelperFunctions\TypeTranslators\APT_TO_IO.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="HelperFunctions\TypeTranslators\ATT_TO_IO.TcPOU">
+    <Compile Include="HelperFunctions\TypeTranslators\F_ATT_TO_IO.TcPOU">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="HelperFunctions\TypeTranslators\BP_TO_IO.TcPOU">

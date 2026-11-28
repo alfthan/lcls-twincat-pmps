@@ -13,7 +13,7 @@ END_VAR
     <Implementation>
       <ST><![CDATA[
 FOR idx := 1 TO PMPS_GVL.AUX_ATTENUATORS DO
-    BP_TO_IO.astAttenuators[idx] := ATT_TO_IO(BP.astAttenuators[idx]);
+    BP_TO_IO.astAttenuators[idx] := F_ATT_TO_IO(BP.astAttenuators[idx]);
 END_FOR
 
 FOR idx := 1 TO PMPS_GVL.MAX_APERTURES DO
